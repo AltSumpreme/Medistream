@@ -2,9 +2,11 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/routes"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -18,6 +20,13 @@ func main() {
 	config.ConnectDB()
 
 	router := gin.Default()
+
+	router.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"*"}, // or "*" for all origins
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+		MaxAge:       12 * time.Hour,
+	}))
 
 	routes.RegisterRoutes(router)
 
