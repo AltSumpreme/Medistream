@@ -7,7 +7,7 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-4 p-4 pt-0">
-  <!-- Welcome Section -->
+
   <div class="grid auto-rows-min gap-4 md:grid-cols-3">
     <div class="aspect-video rounded-xl bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
       <div class="text-center">
@@ -29,7 +29,7 @@
     </div>
   </div>
 
-  <!-- Health Overview -->
+  
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
     <Card title="Blood Pressure" headerClass="flex justify-between items-center" bodyClass="space-y-1">
       <Heart class="h-4 w-4 text-red-500" />
@@ -64,9 +64,8 @@
     </Card>
   </div>
 
-  <!-- Main Content Grid -->
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-    <!-- Appointments -->
+   
     <div class="col-span-4">
       <Card title="Upcoming Appointments" headerClass="flex items-center gap-2">
         <Calendar class="h-5 w-5" />

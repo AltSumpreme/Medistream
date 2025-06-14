@@ -1,0 +1,36 @@
+package models
+
+type Role string
+
+const (
+	RoleAdmin        Role = "ADMIN"
+	RolePatient      Role = "PATIENT"
+	RoleDoctor       Role = "DOCTOR"
+	RoleReceptionist Role = "RECEPTIONIST"
+)
+
+type AppointmentStatus string
+
+const (
+	AppointmentStatusPending   AppointmentStatus = "PENDING"
+	AppointmentStatusConfirmed AppointmentStatus = "CONFIRMED"
+	AppointmentStatusCancelled AppointmentStatus = "CANCELLED"
+	AppointmentStatusCompleted AppointmentStatus = "COMPLETED"
+)
+
+type VitalType string
+
+const (
+	BP     VitalType = "BLOOD_PRESSURE"
+	HR     VitalType = "HEART_RATE"
+	Weight VitalType = "WEIGHT"
+	BMI    VitalType = "BMI"
+)
+
+type GoalType string
+
+const (
+	Steps GoalType = "STEPS"
+	Water GoalType = "WATER"
+	Sleep GoalType = "SLEEP"
+)
