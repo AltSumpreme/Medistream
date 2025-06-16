@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -56,4 +58,13 @@ func ValidateJWT(tokenStr string) (*JWTClaims, error) {
 	} else {
 		return nil, jwt.ErrTokenSignatureInvalid
 	}
+}
+
+func GenerateRefreshToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
 }

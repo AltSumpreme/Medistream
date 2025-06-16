@@ -4,15 +4,13 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 )
-
-// DB is a global variable to hold the database connection
 
 func SignUp(c *gin.Context) {
 	log.Println("SignUp called")
@@ -35,7 +33,7 @@ func SignUp(c *gin.Context) {
 	}
 
 	// Hash password
-	hashedpassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	hashedpassword, err := utils.HashPassword(input.Password)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
@@ -73,19 +71,35 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+	if err := utils.VerifyPassword(user.Password, input.Password); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
 
-	token, err := utils.GenerateJWT(user.ID, string(user.Role))
+	accessToken, err := utils.GenerateJWT(user.ID, string(user.Role))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
+
+	refreshToken, err := utils.GenerateRefreshToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
+		return
+	}
+
+	rt := models.RefreshToken{
+		UserID:    user.ID,
+		Token:     refreshToken,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+	}
+	if err := config.DB.Create(&rt).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create refresh token"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"message": "User logged in successfully",
-		"token":   token,
+		"message":      "User logged in successfully",
+		"access_token": accessToken,
 	})
 }
 
@@ -111,4 +125,30 @@ func VerifyToken(c *gin.Context) {
 		"issuedAt": claims.IssuedAt,
 		"expires":  claims.ExpiresAt,
 	})
+}
+
+func RefreshAccessToken(c *gin.Context) {
+	var input struct {
+		RefreshToken string `json:"refresh_token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var stored models.RefreshToken
+	if err := config.DB.Preload("User").Where("token = ? AND revoked = false", input.RefreshToken).First(&stored).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
+		return
+	}
+	if time.Now().After(stored.ExpiresAt) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token has expired"})
+		return
+	}
+
+	accessToken, _ := utils.GenerateJWT(stored.UserID, string(stored.User.Role))
+	c.JSON(http.StatusOK, gin.H{
+		"message":      "Access token refreshed successfully",
+		"access_token": accessToken})
+
 }

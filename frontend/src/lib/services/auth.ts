@@ -2,7 +2,7 @@ import api  from "$lib/config/api";
 
 
 const loginUser = async (email : string , password : string) => {
-    const response = await api.post("/api/login", {
+    const response = await api.post("/auth/login", {
         email,
         password,
     });
@@ -12,7 +12,7 @@ const loginUser = async (email : string , password : string) => {
 
 
 const registerUser = async (firstName: string, lastName: string, email: string, password: string) => {
-    const response = await api.post("/api/signup", {
+    const response = await api.post("/auth/signup", {
         firstName,
         lastName,
         email,
