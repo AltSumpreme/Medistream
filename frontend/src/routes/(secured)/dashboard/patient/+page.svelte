@@ -2,6 +2,7 @@
   import Sidebar from '$lib/components/ui/SideBar.svelte';
   import PatientHeader from '$lib/components/ui/PatientHeader.svelte';
   import PatientDashboard from '$lib/components/PatientDashboard.svelte';
+  
 
   let isSidebarOpen = true;
   const toggleSidebar = () => isSidebarOpen = !isSidebarOpen;
@@ -23,6 +24,7 @@
 
     
     <main class="flex-1 overflow-y-auto bg-gray-50">
+
       <PatientDashboard />
     </main>
   </div>

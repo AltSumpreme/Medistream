@@ -8,7 +8,7 @@
     { title: "Medical Records", icon: FileText, url: "#" },
     { title: "Prescriptions", icon: Pill, url: "#" },
     { title: "Health Monitoring", icon: Heart, url: "#" },
-    { title: "Messages", icon: MessageSquare, url: "#" },
+   // { title: "Messages", icon: MessageSquare, url: "#" },
   ];
 
   const quickActions = [
