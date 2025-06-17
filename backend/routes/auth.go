@@ -13,4 +13,10 @@ func RegisterRoutes(r *gin.Engine) {
 		auth.POST("/verify", controllers.VerifyToken)
 
 	}
+	user := r.Group("/user")
+	{
+		user.GET("/:id", controllers.GetUserProfile)
+		user.PUT("/:id", controllers.UpdateUserProfile)
+
+	}
 }
