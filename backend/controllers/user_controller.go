@@ -1,8 +1,11 @@
 package controllers
 
 import (
+	"net/http"
+
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/models"
+	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -60,4 +63,44 @@ func UpdateUserProfile(c *gin.Context) {
 		"updatedAt": user.UpdatedAt,
 	})
 
+}
+func PromoteUser(c *gin.Context) {
+	var userID = c.Param("id")
+
+	var user models.User
+
+	switch user.Role {
+	case models.RolePatient:
+		if err := config.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+			utils.Log.Warnf("PromoteUser: User not found - %v", err)
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		user.Role = models.RoleDoctor
+		if err := config.DB.Save(&user).Error; err != nil {
+			utils.Log.Errorf("PromoteUser: Failed to promote user to doctor - %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to promote user to doctor"})
+			return
+		}
+
+	case models.RoleDoctor:
+		if err := config.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+			utils.Log.Errorf("PromoteUser: User not found - %v", err)
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		user.Role = models.RoleAdmin
+	case models.RoleAdmin:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User is aldready an admin"})
+
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user role"})
+		return
+	}
+	if err := config.DB.Save(&user).Error; err != nil {
+		utils.Log.Errorf("PromoteUser: Failed to promote user - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to promote user"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "User promoted successfully"})
 }
