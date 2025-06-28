@@ -57,7 +57,15 @@ func SignUp(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
-
+	patient := models.Patient{
+		UserID: user.ID,
+	}
+	if err := config.DB.Create(&patient).Error; err != nil {
+		utils.Log.Errorf("SignUp: Failed to create patient profile - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create patient profile"})
+		return
+	}
+	utils.Log.Infof("SignUp: User succesfully signed up")
 	c.JSON(http.StatusOK, gin.H{"message": "User signed up successfully"})
 }
 
