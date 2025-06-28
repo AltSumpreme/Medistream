@@ -13,11 +13,11 @@ func RegisterAppointmentRoutes(rg *gin.RouterGroup) {
 	rg.GET("/", utils.RoleChecker(models.RoleAdmin), controllers.GetAllAppointments)
 	rg.GET("/:id", utils.RoleChecker(models.RoleAdmin, models.RolePatient, models.RoleDoctor), controllers.GetAppointmentByID)
 	rg.PUT("/:id", utils.RoleChecker(models.RoleAdmin, models.RolePatient, models.RoleDoctor), controllers.UpdateAppointment)
-	rg.PUT("/:id", utils.RoleChecker(models.RoleAdmin), controllers.ChangeAppointmentStatus)
+	rg.PUT("/status/:id", utils.RoleChecker(models.RoleAdmin), controllers.ChangeAppointmentStatus)
 	rg.PUT("/reschedule/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), controllers.RescheduleAppointment)
 	rg.PUT("/cancel/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), controllers.CancelAppointment)
-	rg.GET("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), controllers.GetAppointmentByDoctorID)
-	rg.GET("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), controllers.GetAppointmentByPatientID)
+	rg.GET("/doctor/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), controllers.GetAppointmentByDoctorID)
+	rg.GET("/patient/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), controllers.GetAppointmentByPatientID)
 	rg.DELETE("/:id", utils.RoleChecker(models.RoleAdmin), controllers.DeleteAppointment)
 
 }

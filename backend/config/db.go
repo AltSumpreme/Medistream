@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/AltSumpreme/Medistream.git/models"
 )
@@ -15,7 +16,9 @@ var DB *gorm.DB
 func ConnectDB() {
 
 	dsn := os.Getenv("DATABASE_URL")
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+
+	gormLogger := logger.Default.LogMode(logger.Silent)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: gormLogger})
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v\n", err)
 

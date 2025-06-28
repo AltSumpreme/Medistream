@@ -1,4 +1,4 @@
-package controllers
+package auth
 
 import (
 	"log"
@@ -187,17 +187,14 @@ func Logout(c *gin.Context) {
 
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-	var stored models.RefreshToken
-	if err := config.DB.Where("token = ? AND revoked = false", tokenStr).First(&stored).Error; err != nil {
-		utils.Log.Errorf("Logout:Invalid or expired refresh token-%v", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
-		return
+	claims, err := utils.ValidateJWT(tokenStr)
+	if err != nil {
+		utils.Log.Warnf("Logout:Invalid or Expired token")
+		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid or expired  token"})
 	}
-
-	stored.Revoked = true
-	if err := config.DB.Save(&stored).Error; err != nil {
-		utils.Log.Errorf("Logout:Failed to revoke token - %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke token"})
+	if err := config.DB.Model(&models.RefreshToken{}).Where("user_id=? AND revoked = false", claims.UserID).Update("revoked", true).Error; err != nil {
+		utils.Log.Errorf("Logout: Failed to revoke refresh token - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke refresh token"})
 		return
 	}
 
