@@ -6,7 +6,7 @@ import (
 
 type Doctor struct {
 	ID     uuid.UUID `gorm:"primaryKey;type:uuid;default:uuid_generate_v4();primaryKey"`
-	UserID string    `gorm:"uniqueIndex"`
+	UserID uuid.UUID `gorm:"uniqueIndex"`
 	User   *User
 
 	Specialization string

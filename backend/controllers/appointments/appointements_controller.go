@@ -1,4 +1,4 @@
-package controllers
+package appointments
 
 import (
 	"net/http"
@@ -13,16 +13,15 @@ import (
 )
 
 type AppointmentInput struct {
-	PatientID uuid.UUID `json:"patient_id" binding:"required"`
-	DoctorID  uuid.UUID `json:"doctor_id" binding:"required"`
-	Date      time.Time `json:"date" binding:"required"`
-	Duration  int       `json:"duration" binding:"required"`
-	Location  string    `json:"location" binding:"required"`
-	Mode      string    `json:"mode" binding:"required,oneof=Online In-Person"`
+	PatientID       uuid.UUID `json:"patient_id" binding:"required"`
+	DoctorID        uuid.UUID `json:"doctor_id" binding:"required"`
+	AppointmentDate time.Time `json:"appointment_date" binding:"required"`
+	Duration        int       `json:"duration" binding:"required"`
+	Location        string    `json:"location" binding:"required"`
+	Mode            string    `json:"mode" binding:"required,oneof=Online In-Person"`
 }
-
 type AppointmentStatusInput struct {
-	Status string `json:"status" binding:"required,oneof=Scheduled Completed Cancelled"`
+	Status string `json:"status" binding:"required,oneof=SCHEDULED CONFIRMED CANCELLED COMPLETED"`
 }
 
 func CreateAppointment(c *gin.Context) {
@@ -34,12 +33,13 @@ func CreateAppointment(c *gin.Context) {
 		return
 	}
 	appointment := models.Appointment{
-		PatientID: input.PatientID,
-		DoctorID:  input.DoctorID,
-		Date:      input.Date,
-		Duration:  input.Duration,
-		Location:  input.Location,
-		Mode:      input.Mode,
+		PatientID:       input.PatientID,
+		DoctorID:        input.DoctorID,
+		AppointmentDate: input.AppointmentDate,
+		Status:          models.AppointmentStatusPending,
+		Duration:        input.Duration,
+		Location:        input.Location,
+		Mode:            input.Mode,
 	}
 
 	scheduleErr := utils.ScheduleAppointment(appointment)
@@ -56,7 +56,7 @@ func CreateAppointment(c *gin.Context) {
 		return
 	}
 	utils.Log.Infof("CreateAppointment: Appointment created successfully with ID %s", appointment.ID)
-	c.JSON(201, gin.H{"message": "Appointment created successfully"})
+	c.JSON(http.StatusCreated, gin.H{"message": "Appointment created successfully"})
 
 }
 
@@ -143,7 +143,7 @@ func UpdateAppointment(c *gin.Context) {
 
 	appt.PatientID = input.PatientID
 	appt.DoctorID = input.DoctorID
-	appt.Date = input.Date
+	appt.AppointmentDate = input.AppointmentDate
 	appt.Duration = input.Duration
 	appt.Location = input.Location
 	appt.Mode = input.Mode
@@ -222,7 +222,7 @@ func RescheduleAppointment(c *gin.Context) {
 		return
 	}
 
-	if user.Role != models.RolePatient || user.ID != appointment.PatientID {
+	if user.Role != models.RoleAdmin && (user.ID != appointment.PatientID || user.ID != appointment.DoctorID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You can only reschedule your own appointment"})
 		return
 	}
@@ -241,7 +241,7 @@ func RescheduleAppointment(c *gin.Context) {
 		return
 	}
 
-	appointment.Date = input.Date
+	appointment.AppointmentDate = input.Date
 	appointment.Duration = input.Duration
 
 	if err := utils.ScheduleAppointment(appointment); err != nil {
@@ -259,7 +259,11 @@ func RescheduleAppointment(c *gin.Context) {
 
 func CancelAppointment(c *gin.Context) {
 	appointmentID := c.Param("id")
-	user, _ := utils.GetCurrentUser(c)
+	user, exists := utils.GetCurrentUser(c)
+	if exists != nil {
+		utils.Log.Warnf("CancelAppointment:Unauthorised access to the route")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "You have not been authenticated"})
+	}
 
 	var appointment models.Appointment
 	if err := config.DB.First(&appointment, "id = ?", appointmentID).Error; err != nil {
@@ -292,7 +296,7 @@ func GetAppointmentByDoctorID(c *gin.Context) {
 
 	var appointments []models.Appointment
 
-	if err := config.DB.WithContext(c.Request.Context()).Where("doctor_id = ?", doctorID).Order("date desc").Find(&appointments).Error; err != nil {
+	if err := config.DB.WithContext(c.Request.Context()).Where("doctor_id = ?", doctorID).Order("appointment_date desc").Find(&appointments).Error; err != nil {
 		utils.Log.Errorf("GetAppointmentByDoctorID: Failed to fetch appointments - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch appointments"})
 		return
@@ -311,7 +315,7 @@ func GetAppointmentByPatientID(c *gin.Context) {
 	}
 	var appointments []models.Appointment
 
-	if err := config.DB.WithContext(c.Request.Context()).Where("patient_id= ?", patientID).Order("date desc").Find(&appointments).Error; err != nil {
+	if err := config.DB.WithContext(c.Request.Context()).Where("patient_id= ?", patientID).Order("appointment_date desc").Find(&appointments).Error; err != nil {
 		utils.Log.Errorf("GetAppointmentByPatientID:Failed to fetch appointments - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch appointments"})
 		return
