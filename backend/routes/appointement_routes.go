@@ -16,7 +16,7 @@ func RegisterAppointmentRoutes(rg *gin.RouterGroup) {
 	rg.PUT("/status/:id", utils.RoleChecker(models.RoleAdmin), appointments.ChangeAppointmentStatus)
 	rg.PUT("/reschedule/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), appointments.RescheduleAppointment)
 	rg.PUT("/cancel/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), appointments.CancelAppointment)
-	rg.GET("/doctor/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), appointments.GetAppointmentByDoctorID)
+	rg.GET("/doctor/:id", utils.RoleChecker(models.RoleAdmin), appointments.GetAppointmentByDoctorID)
 	rg.GET("/patient/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), appointments.GetAppointmentByPatientID)
 	rg.DELETE("/:id", utils.RoleChecker(models.RoleAdmin), appointments.DeleteAppointment)
 

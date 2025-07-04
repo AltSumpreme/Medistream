@@ -25,6 +25,9 @@ const (
 	HR     VitalType = "HEART_RATE"
 	Weight VitalType = "WEIGHT"
 	BMI    VitalType = "BMI"
+	Temp   VitalType = "TEMPERATURE"
+	RR     VitalType = "RESPIRATORY_RATE"
+	OS     VitalType = "OXYGEN_SATURATION"
 )
 
 type GoalType string

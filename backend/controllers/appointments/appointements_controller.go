@@ -90,6 +90,7 @@ func GetAllAppointments(c *gin.Context) {
 func GetAppointmentByID(c *gin.Context) {
 
 	appointmentID := c.Param("id")
+	user, _ := utils.GetCurrentUser(c)
 	var appointment models.Appointment
 
 	if err := config.DB.WithContext(c.Request.Context()).Preload("Patient").Preload("Doctor").Where("id = ?", appointmentID).First(&appointment).Error; err != nil {
@@ -97,7 +98,13 @@ func GetAppointmentByID(c *gin.Context) {
 		c.JSON(404, gin.H{"error": "Appointment not found - " + err.Error()})
 		return
 	}
-	utils.Log.Infof("GetAppointmentByID: Retrieved appointment with ID %s", appointment.ID)
+
+	if user.Role != models.RoleAdmin && (appointment.PatientID != user.ID || appointment.DoctorID != user.ID) {
+		utils.Log.Warnf("GetAppointmentByID: You are not authorised to access this appointment")
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
 	c.JSON(200, gin.H{"appointment": appointment})
 }
 
@@ -288,39 +295,98 @@ func CancelAppointment(c *gin.Context) {
 
 func GetAppointmentByDoctorID(c *gin.Context) {
 	doctorID := c.Param("id")
-	if _, err := utils.GetCurrentUser(c); err != nil {
+	user, err := utils.GetCurrentUser(c)
+	if err != nil {
 		utils.Log.Warnf("GetAppointmentByDoctorID: Unauthorized access - %v", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: " + err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	var appointments []models.Appointment
+	if user.Role == models.RoleDoctor && user.ID.String() != doctorID {
+		utils.Log.Warnf("GetAppointmentByDoctorID: Doctor %s attempted to access data of doctor %s", user.ID, doctorID)
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
 
-	if err := config.DB.WithContext(c.Request.Context()).Where("doctor_id = ?", doctorID).Order("appointment_date desc").Find(&appointments).Error; err != nil {
+	limit := 10
+	offset := 0
+	const MaxLimit = 100
+
+	if l := c.Query("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= MaxLimit {
+			limit = n
+		} else {
+			limit = MaxLimit
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if n, err := strconv.Atoi(o); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	var appointments []models.Appointment
+	if err := config.DB.WithContext(c.Request.Context()).
+		Where("doctor_id = ?", doctorID).
+		Order("appointment_date desc").
+		Limit(limit).
+		Offset(offset).
+		Find(&appointments).Error; err != nil {
 		utils.Log.Errorf("GetAppointmentByDoctorID: Failed to fetch appointments - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch appointments"})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"appointments": appointments})
 }
 
 func GetAppointmentByPatientID(c *gin.Context) {
 	patientID := c.Param("id")
-
-	if _, err := utils.GetCurrentUser(c); err != nil {
-		utils.Log.Warnf("GetAppointmentByPatientID:Unauthorized access")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "You do not have permission to access this route"})
-
+	user, err := utils.GetCurrentUser(c)
+	if err != nil {
+		utils.Log.Warnf("GetAppointmentByPatientID: Unauthorized access attempt")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
 	}
-	var appointments []models.Appointment
 
-	if err := config.DB.WithContext(c.Request.Context()).Where("patient_id= ?", patientID).Order("appointment_date desc").Find(&appointments).Error; err != nil {
-		utils.Log.Errorf("GetAppointmentByPatientID:Failed to fetch appointments - %v", err)
+	if user.Role == models.RolePatient && user.ID.String() != patientID {
+		utils.Log.Warnf("GetAppointmentByPatientID: Access denied for patient %s to data of %s", user.ID, patientID)
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
+	limit := 10
+	offset := 0
+	const MaxLimit = 100
+
+	if l := c.Query("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= MaxLimit {
+			limit = n
+		} else {
+			limit = MaxLimit
+		}
+	}
+
+	if o := c.Query("offset"); o != "" {
+		if n, err := strconv.Atoi(o); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	var appointments []models.Appointment
+	db := config.DB.WithContext(c.Request.Context()).
+		Where("patient_id = ?", patientID).
+		Order("appointment_date desc").
+		Limit(limit).
+		Offset(offset)
+
+	if user.Role == models.RoleDoctor {
+		db = db.Preload("Doctor").Where("doctor_id = ?", user.ID)
+	}
+	if err := db.Find(&appointments); err != nil {
+		utils.Log.Errorf("GetAppointmentByPatientID: Failed to fetch appointments - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch appointments"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"appointments": appointments})
-
 }
