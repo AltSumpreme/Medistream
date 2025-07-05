@@ -16,6 +16,7 @@ type Vital struct {
 	MedicalRecordID *uuid.UUID `gorm:"type:uuid"`
 	CreatedAt       time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt       time.Time  `gorm:"autoUpdateTime"`
+	DeletedAt       *time.Time `gorm:"index"`
 
 	Patient       Patient       `gorm:"foreignKey:PatientID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	MedicalRecord MedicalRecord `gorm:"foreignKey:MedicalRecordID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`

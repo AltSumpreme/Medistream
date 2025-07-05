@@ -14,4 +14,7 @@ func RegisterRoutes(r *gin.Engine) {
 
 	RegisterUserRoutes(protected.Group("/user"))
 	RegisterAppointmentRoutes(protected.Group("/appointments"))
+	RegisterMedicalRecordsRoutes(protected.Group("/medical-records"))
+	RegisterVitalsRoutes(protected.Group("/vitals"))
+	RegisterPrescriptionRoutes(protected.Group("/prescriptions"))
 }

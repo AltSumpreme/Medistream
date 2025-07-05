@@ -50,6 +50,34 @@ func UpdateUserProfile(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to update user profile"})
 		return
 	}
+	response := gin.H{
+		"message":    "User profile updated successfully",
+		"id":         user.ID,
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
+		"email":      user.Email,
+		"role":       user.Role,
+		"created_at": user.CreatedAt,
+		"updated_at": user.UpdatedAt,
+	}
+
+	if user.Role == models.RoleDoctor {
+		if input.Doctor != nil {
+			var doctor models.Doctor
+			if err := config.DB.First(&doctor, "user_id = ?", user.ID).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Doctor profile not found"})
+				return
+			}
+
+			doctor.Specialization = input.Doctor.Specialization
+			if err := config.DB.Save(&doctor).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update specialization"})
+				return
+			}
+
+			response["specialization"] = doctor.Specialization
+		}
+	}
 
 	c.JSON(200, gin.H{
 		"message": "User profile updated successfully",

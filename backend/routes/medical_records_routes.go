@@ -7,13 +7,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterMedicalRecordsRoutes(router *gin.Engine) {
-	medicalRecordsGroup := router.Group("/api/medical-records")
+func RegisterMedicalRecordsRoutes(rg *gin.RouterGroup) {
+
 	{
-		medicalRecordsGroup.POST("/", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.CreateMedicalRecord)
-		medicalRecordsGroup.GET("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.GetMedicalRecord)
-		medicalRecordsGroup.PUT("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.UpdateMedicalRecord)
-		medicalRecordsGroup.DELETE("/soft/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.SoftDeleteMedicalRecord)
-		medicalRecordsGroup.DELETE("/hard/:id", utils.RoleChecker(models.RoleAdmin), medicalrecords.HardDeleteMedicalRecord)
+		rg.POST("/", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.CreateMedicalRecord)
+		rg.GET("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.GetMedicalRecord)
+		rg.PUT("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.UpdateMedicalRecord)
+		rg.DELETE("/soft/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.SoftDeleteMedicalRecord)
+		rg.DELETE("/hard/:id", utils.RoleChecker(models.RoleAdmin), medicalrecords.HardDeleteMedicalRecord)
 	}
 }
