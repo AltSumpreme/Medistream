@@ -45,20 +45,37 @@ func init() {
 }
 
 func seedUser(role models.Role) models.User {
-	email := fmt.Sprintf("test_%s@example.com", role)
-	user := models.User{}
+	email := fmt.Sprintf("test_%s_%s@example.com", role, uuid.New().String())
+
+	// Check if user already exists
+	var user models.User
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err == nil {
 		return user
 	}
+
+	// Create Auth entry first
+	auth := models.Auth{
+		ID:       uuid.New(),
+		Email:    email,
+		Password: "hashed_dummy_password", // In production, hash it properly
+	}
+	if err := config.DB.Create(&auth).Error; err != nil {
+		log.Fatalf("failed to seed auth: %v", err)
+	}
+
 	user = models.User{
 		ID:        uuid.New(),
 		FirstName: "Test",
 		LastName:  string(role),
-		Email:     email,
-		Password:  "securepass",
+		Phone:     "1234567890",
 		Role:      role,
+		AuthID:    auth.ID,
 	}
-	config.DB.Create(&user)
+
+	if err := config.DB.Create(&user).Error; err != nil {
+		log.Fatalf("failed to seed user: %v", err)
+	}
+
 	return user
 }
 
@@ -127,6 +144,7 @@ func createTestAppointment(patientID, doctorID uuid.UUID) models.Appointment {
 		Duration:        30,
 		Location:        "Test Room",
 		Mode:            "Online",
+		AppointmentType: models.ApptType("Consultation"),
 		Status:          models.AppointmentStatusPending,
 	}
 	config.DB.Create(&appt)
@@ -142,6 +160,7 @@ func TestCreateAppointment(t *testing.T) {
 		"doctor_id":        TestDoctorUser.ID,
 		"appointment_date": time.Now().Add(200 * time.Hour).Format(time.RFC3339),
 		"duration":         45,
+		"appointment_type": "CONSULTATION",
 		"location":         "Room A",
 		"mode":             "Online",
 	}
@@ -188,6 +207,8 @@ func TestUpdateAppointment(t *testing.T) {
 		"doctor_id":        TestDoctorUser.ID,
 		"appointment_date": time.Now().Add(72 * time.Hour).Format(time.RFC3339),
 		"duration":         60,
+		"notes":            "Updated notes",
+		"appointment_type": "FOLLOWUP",
 		"location":         "Updated Room",
 		"mode":             "In-Person",
 	}
@@ -234,6 +255,7 @@ func TestRescheduleAppointment(t *testing.T) {
 	body := map[string]interface{}{
 		"date":     time.Now().Add(96 * time.Hour).Format(time.RFC3339),
 		"duration": 60,
+		"mode":     "In-Person",
 	}
 	jsonBody, _ := json.Marshal(body)
 

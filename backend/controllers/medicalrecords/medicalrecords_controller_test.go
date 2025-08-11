@@ -45,19 +45,32 @@ func init() {
 
 func seedUser(role models.Role) models.User {
 	email := fmt.Sprintf("test_%s@example.com", role)
-	user := models.User{}
-	if err := config.DB.Where("email = ?", email).First(&user).Error; err == nil {
-		return user
+	password := "securepass"
+
+	// Check if Auth already exists
+	var auth models.Auth
+	if err := config.DB.Where("email = ?", email).First(&auth).Error; err != nil {
+		auth = models.Auth{
+			ID:       uuid.New(),
+			Email:    email,
+			Password: password, // You might want to hash this in real app logic
+		}
+		config.DB.Create(&auth)
 	}
-	user = models.User{
-		ID:        uuid.New(),
-		FirstName: "Test",
-		LastName:  string(role),
-		Email:     email,
-		Password:  "securepass",
-		Role:      role,
+
+	// Check if User already exists for that Auth
+	var user models.User
+	if err := config.DB.Where("auth_id = ?", auth.ID).First(&user).Error; err != nil {
+		user = models.User{
+			ID:        uuid.New(),
+			FirstName: "Test",
+			LastName:  string(role),
+			AuthID:    auth.ID,
+			Role:      role,
+			Phone:     "1234567890",
+		}
+		config.DB.Create(&user)
 	}
-	config.DB.Create(&user)
 	return user
 }
 
@@ -77,27 +90,22 @@ func testRoleChecker(allowedRoles ...models.Role) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		log.Printf("val type: %T", val)
-		userPtr, ok := val.(*models.User)
-		if !ok || userPtr == nil {
+		user, ok := val.(*models.User)
+		if !ok || user == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "User type assertion failed"})
 			c.Abort()
 			return
 		}
-
-		user := *userPtr
-
 		if slices.Contains(allowedRoles, user.Role) {
 			c.Next()
 			return
 		}
-
 		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Forbidden: role '%s' not permitted", user.Role)})
 		c.Abort()
 	}
 }
 
-func setupMedicalRecordTestRouter(user models.User) *gin.Engine {
+func setupRouter(user models.User) *gin.Engine {
 	r := gin.Default()
 	r.Use(injectTestUser(user))
 
@@ -124,123 +132,142 @@ func createTestMedicalRecord(t *testing.T) models.MedicalRecord {
 	return record
 }
 
+// ---------------------- TEST CASES ----------------------
+
 func TestCreateMedicalRecord(t *testing.T) {
-	router := setupMedicalRecordTestRouter(TestDoctorUser)
+	router := setupRouter(TestDoctorUser)
 
-	// --- Case 1: With Vitals ---
-	vitals := []map[string]interface{}{
-		{
-			"type":        "BloodPressure",
-			"value":       "120/80",
-			"status":      "Normal",
-			"recorded_at": "2025-07-04T10:00:00Z",
-		},
-		{
-			"type":        "HeartRate",
-			"value":       "75",
-			"status":      "Normal",
-			"recorded_at": "2025-07-04T10:10:00Z",
-		},
-	}
-	withVitalsBody := map[string]interface{}{
-		"patient_id": TestPatientUser.ID,
-		"doctor_id":  TestDoctorUser.ID,
-		"diagnosis":  "High BP observed",
-		"notes":      "Prescribed mild medication",
-		"vitals":     vitals,
-	}
-	withVitalsJSON, _ := json.Marshal(withVitalsBody)
+	t.Run("Create With Vitals", func(t *testing.T) {
+		body := map[string]interface{}{
+			"patient_id": TestPatientUser.ID,
+			"doctor_id":  TestDoctorUser.ID,
+			"diagnosis":  "High BP",
+			"notes":      "Prescribed medication",
+			"vitals": []map[string]interface{}{
+				{
+					"type":        "BloodPressure",
+					"value":       "120/80",
+					"status":      "Normal",
+					"recorded_at": "2025-07-04T10:00:00Z",
+				},
+				{
+					"type":        "HeartRate",
+					"value":       "75",
+					"status":      "Normal",
+					"recorded_at": "2025-07-04T10:10:00Z",
+				},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
 
-	req1 := httptest.NewRequest("POST", "/medicalrecords/", bytes.NewBuffer(withVitalsJSON))
-	req1.Header.Set("Content-Type", "application/json")
-	res1 := httptest.NewRecorder()
-	router.ServeHTTP(res1, req1)
+		req := httptest.NewRequest("POST", "/medicalrecords/", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		res := httptest.NewRecorder()
 
-	assert.Equal(t, http.StatusCreated, res1.Code)
-	assert.Contains(t, res1.Body.String(), "Medical record created successfully")
+		router.ServeHTTP(res, req)
 
-	// --- Case 2: Without Vitals ---
-	withoutVitalsBody := map[string]interface{}{
-		"patient_id": TestPatientUser.ID,
-		"doctor_id":  TestDoctorUser.ID,
-		"diagnosis":  "Follow-up visit",
-		"notes":      "No vitals recorded today",
-	}
-	withoutVitalsJSON, _ := json.Marshal(withoutVitalsBody)
+		assert.Equal(t, http.StatusCreated, res.Code)
+		assert.Contains(t, res.Body.String(), "Medical record created successfully")
+	})
 
-	req2 := httptest.NewRequest("POST", "/medicalrecords/", bytes.NewBuffer(withoutVitalsJSON))
-	req2.Header.Set("Content-Type", "application/json")
-	res2 := httptest.NewRecorder()
-	router.ServeHTTP(res2, req2)
+	t.Run("Create Without Vitals", func(t *testing.T) {
+		body := map[string]interface{}{
+			"patient_id": TestPatientUser.ID,
+			"doctor_id":  TestDoctorUser.ID,
+			"diagnosis":  "Routine checkup",
+			"notes":      "All good",
+		}
+		jsonBody, _ := json.Marshal(body)
 
-	assert.Equal(t, http.StatusCreated, res2.Code)
-	assert.Contains(t, res2.Body.String(), "Medical record created successfully")
+		req := httptest.NewRequest("POST", "/medicalrecords/", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		res := httptest.NewRecorder()
+
+		router.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusCreated, res.Code)
+		assert.Contains(t, res.Body.String(), "Medical record created successfully")
+	})
 }
 
 func TestGetMedicalRecord(t *testing.T) {
-	r := setupMedicalRecordTestRouter(TestDoctorUser)
+	r := setupRouter(TestDoctorUser)
 	record := createTestMedicalRecord(t)
 
-	req := httptest.NewRequest("GET", "/medicalrecords/"+record.ID.String(), nil)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	t.Run("Fetch Medical Record By ID", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/medicalrecords/"+record.ID.String(), nil)
+		res := httptest.NewRecorder()
 
-	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Contains(t, res.Body.String(), "Test Diagnosis")
+		r.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusOK, res.Code)
+		assert.Contains(t, res.Body.String(), "Test Diagnosis")
+	})
 }
 
 func TestGetRecordsByPatientID(t *testing.T) {
-	r := setupMedicalRecordTestRouter(TestDoctorUser)
+	r := setupRouter(TestDoctorUser)
 	_ = createTestMedicalRecord(t)
 
-	req := httptest.NewRequest("GET", "/medicalrecords/patient/"+TestPatientUser.ID.String(), nil)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	t.Run("Fetch Records By Patient ID", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/medicalrecords/patient/"+TestPatientUser.ID.String(), nil)
+		res := httptest.NewRecorder()
 
-	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Contains(t, res.Body.String(), "Test Diagnosis")
+		r.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusOK, res.Code)
+		assert.Contains(t, res.Body.String(), "Test Diagnosis")
+	})
 }
 
 func TestUpdateMedicalRecord(t *testing.T) {
-	r := setupMedicalRecordTestRouter(TestDoctorUser)
+	r := setupRouter(TestDoctorUser)
 	record := createTestMedicalRecord(t)
 
-	update := map[string]string{
-		"diagnosis": "Updated Diagnosis",
-		"notes":     "Updated notes",
-	}
-	jsonUpdate, _ := json.Marshal(update)
+	t.Run("Update Diagnosis and Notes", func(t *testing.T) {
+		update := map[string]string{
+			"diagnosis": "Updated Diagnosis",
+			"notes":     "Updated notes",
+		}
+		jsonUpdate, _ := json.Marshal(update)
 
-	req := httptest.NewRequest("PUT", "/medicalrecords/"+record.ID.String(), bytes.NewBuffer(jsonUpdate))
-	req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequest("PUT", "/medicalrecords/"+record.ID.String(), bytes.NewBuffer(jsonUpdate))
+		req.Header.Set("Content-Type", "application/json")
+		res := httptest.NewRecorder()
 
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+		r.ServeHTTP(res, req)
 
-	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Contains(t, res.Body.String(), "Medical record updated")
+		assert.Equal(t, http.StatusOK, res.Code)
+		assert.Contains(t, res.Body.String(), "Medical record updated")
+	})
 }
 
 func TestSoftDeleteMedicalRecord(t *testing.T) {
-	r := setupMedicalRecordTestRouter(TestDoctorUser)
+	r := setupRouter(TestDoctorUser)
 	record := createTestMedicalRecord(t)
 
-	req := httptest.NewRequest("DELETE", "/medicalrecords/soft/"+record.ID.String(), nil)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	t.Run("Soft Delete Record", func(t *testing.T) {
+		req := httptest.NewRequest("DELETE", "/medicalrecords/soft/"+record.ID.String(), nil)
+		res := httptest.NewRecorder()
 
-	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Contains(t, res.Body.String(), "soft deleted")
+		r.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusOK, res.Code)
+		assert.Contains(t, res.Body.String(), "soft deleted")
+	})
 }
 
 func TestHardDeleteMedicalRecord(t *testing.T) {
-	r := setupMedicalRecordTestRouter(TestAdminUser)
+	r := setupRouter(TestAdminUser)
 	record := createTestMedicalRecord(t)
 
-	req := httptest.NewRequest("DELETE", "/medicalrecords/hard/"+record.ID.String(), nil)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	t.Run("Hard Delete Record", func(t *testing.T) {
+		req := httptest.NewRequest("DELETE", "/medicalrecords/hard/"+record.ID.String(), nil)
+		res := httptest.NewRecorder()
 
-	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Contains(t, res.Body.String(), "hard deleted")
+		r.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusOK, res.Code)
+		assert.Contains(t, res.Body.String(), "hard deleted")
+	})
 }

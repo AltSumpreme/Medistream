@@ -6,8 +6,6 @@
   import MedicationCard from "./ui/widgets/MedicationCard.svelte";
   import HealthGoalsCard from "./ui/widgets/HealthGoalsCard.svelte";
 
-
-  import { Calendar, Heart, Pill, FileText, Clock, AlertCircle } from "lucide-svelte";
 </script>
 
 <div class="flex flex-1 flex-col gap-4 p-4 pt-0">

@@ -17,8 +17,10 @@ type AppointmentInput struct {
 	DoctorID        uuid.UUID `json:"doctor_id" binding:"required"`
 	AppointmentDate time.Time `json:"appointment_date" binding:"required"`
 	Duration        int       `json:"duration" binding:"required"`
+	AppointmentType string    `json:"appointment_type" binding:"required,oneof=CONSULTATION FOLLOWUP CHECKUP EMERGENCY"`
 	Location        string    `json:"location" binding:"required"`
 	Mode            string    `json:"mode" binding:"required,oneof=Online In-Person"`
+	Notes           string    `json:"notes"`
 }
 type AppointmentStatusInput struct {
 	Status string `json:"status" binding:"required,oneof=SCHEDULED CONFIRMED CANCELLED COMPLETED"`
@@ -38,8 +40,8 @@ func CreateAppointment(c *gin.Context) {
 		AppointmentDate: input.AppointmentDate,
 		Status:          models.AppointmentStatusPending,
 		Duration:        input.Duration,
-		Location:        input.Location,
-		Mode:            input.Mode,
+		AppointmentType: models.ApptType(input.AppointmentType),
+		Notes:           input.Notes,
 	}
 
 	scheduleErr := utils.ScheduleAppointment(appointment)
@@ -143,6 +145,7 @@ func UpdateAppointment(c *gin.Context) {
 	}
 
 	var input AppointmentInput
+
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
 		return
@@ -152,8 +155,17 @@ func UpdateAppointment(c *gin.Context) {
 	appt.DoctorID = input.DoctorID
 	appt.AppointmentDate = input.AppointmentDate
 	appt.Duration = input.Duration
-	appt.Location = input.Location
+	appt.AppointmentType = models.ApptType(input.AppointmentType)
 	appt.Mode = input.Mode
+	appt.Notes = input.Notes
+
+	if input.Location != "" {
+		if user.Role == "PATIENT" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only doctor or admin can update location"})
+			return
+		}
+	}
+	appt.Location = input.Location
 
 	// Schedule conflict check
 	if err := utils.ScheduleAppointment(appt); err != nil {
@@ -242,6 +254,7 @@ func RescheduleAppointment(c *gin.Context) {
 	var input struct {
 		Date     time.Time `json:"date" binding:"required"`
 		Duration int       `json:"duration" binding:"required"`
+		Mode     string    `json:"mode" binding:"required,oneof=Online In-Person"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
@@ -250,6 +263,7 @@ func RescheduleAppointment(c *gin.Context) {
 
 	appointment.AppointmentDate = input.Date
 	appointment.Duration = input.Duration
+	appointment.Mode = input.Mode
 
 	if err := utils.ScheduleAppointment(appointment); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -373,7 +387,7 @@ func GetAppointmentByPatientID(c *gin.Context) {
 	}
 
 	var appointments []models.Appointment
-	db := config.DB.WithContext(c.Request.Context()).
+	db := config.DB.WithContext(c.Request.Context()).Preload("Patient").
 		Where("patient_id = ?", patientID).
 		Order("appointment_date desc").
 		Limit(limit).
@@ -382,7 +396,9 @@ func GetAppointmentByPatientID(c *gin.Context) {
 	if user.Role == models.RoleDoctor {
 		db = db.Preload("Doctor").Where("doctor_id = ?", user.ID)
 	}
-	if err := db.Find(&appointments); err != nil {
+
+	result := db.Find(&appointments)
+	if err := result.Error; err != nil {
 		utils.Log.Errorf("GetAppointmentByPatientID: Failed to fetch appointments - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch appointments"})
 		return

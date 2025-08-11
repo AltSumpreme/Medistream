@@ -14,10 +14,6 @@ func ScheduleAppointment(appointment models.Appointment) error {
 		return errors.New("invalid duration: must be greater than 0")
 	}
 
-	if appointment.Mode != "Online" && appointment.Mode != "In-Person" {
-		return errors.New("invalid mode: must be 'Online' or 'In-Person'")
-	}
-
 	if time.Now().After(appointment.AppointmentDate) {
 		return errors.New("invalid date: appointment date must be in the future")
 

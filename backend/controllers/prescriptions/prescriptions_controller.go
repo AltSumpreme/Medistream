@@ -22,14 +22,6 @@ type PrescriptionInput struct {
 	IssuedAt        time.Time `json:"issued_at" binding:"required"`
 }
 
-type UpdatePrescriptionInput struct {
-	Medication      string     `json:"medication"`
-	Dosage          string     `json:"dosage"`
-	Instructions    string     `json:"instructions"`
-	IssuedAt        time.Time  `json:"issued_at"`
-	MedicalRecordID *uuid.UUID `json:"medical_record_id"`
-}
-
 func CreatePrescription(c *gin.Context) {
 	var input PrescriptionInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -42,7 +34,7 @@ func CreatePrescription(c *gin.Context) {
 		ID:              uuid.New(),
 		PatientID:       input.PatientID,
 		DoctorID:        input.DoctorID,
-		MedicalRecordID: input.MedicalRecordID,
+		MedicalRecordID: &input.MedicalRecordID,
 		Medication:      input.Medication,
 		Dosage:          input.Dosage,
 		Instructions:    input.Instructions,
@@ -145,7 +137,7 @@ func GetPrescriptionByID(c *gin.Context) {
 		}
 
 	case models.RoleDoctor:
-		if prescription.MedicalRecordID == uuid.Nil {
+		if prescription.MedicalRecordID == nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No medical record linked to this prescription"})
 			return
 		}
@@ -171,7 +163,7 @@ func UpdatePrescription(c *gin.Context) {
 		return
 	}
 
-	var input UpdatePrescriptionInput
+	var input PrescriptionInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
 		return
@@ -183,8 +175,8 @@ func UpdatePrescription(c *gin.Context) {
 		"instructions": input.Instructions,
 		"issued_at":    input.IssuedAt,
 	}
-	if input.MedicalRecordID != nil {
-		updateData["medical_record_id"] = *input.MedicalRecordID
+	if input.MedicalRecordID != uuid.Nil {
+		updateData["medical_record_id"] = input.MedicalRecordID
 	}
 
 	if err := config.DB.WithContext(c).

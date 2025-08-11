@@ -17,7 +17,7 @@ type Prescription struct {
 	CreatedAt       time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt       time.Time  `gorm:"autoUpdateTime"`
 	DeletedAt       *time.Time `gorm:"index"`
-	MedicalRecordID uuid.UUID  `gorm:"type:uuid"`
+	MedicalRecordID *uuid.UUID `gorm:"type:uuid"`
 
 	MedicalRecord MedicalRecord `gorm:"foreignKey:MedicalRecordID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
 	Patient       Patient       `gorm:"foreignKey:PatientID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`

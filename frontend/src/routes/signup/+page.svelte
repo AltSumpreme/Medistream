@@ -6,6 +6,7 @@
   let firstName = '';
   let lastName = '';
   let email = '';
+  let phone = '';
   let password = '';
   let confirmPassword = '';
   let errorMessage = '';
@@ -13,12 +14,12 @@
   $: errorMessage = confirmPassword && confirmPassword !== password ? 'Passwords do not match' : '';
   
  const handleSignup = async () => {
-  if (!firstName || !lastName || !email || !password || !confirmPassword) {
+  if (!firstName || !lastName || !email || !password ||!phone || !confirmPassword) {
     errorMessage = 'All fields are required';
     return;
   }
    try {
-    await registerUser(firstName, lastName, email, password);
+    await registerUser(firstName, lastName, email, password, phone);
     window.location.href = '/login';
   } catch (error) {
     errorMessage = 'Signup failed. Please try again.';
@@ -96,6 +97,14 @@
           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
         />
       </div>
+      <label for="phone" class="block text-sm font-medium text-gray-700">Phone Number</label>
+      <input
+        id="phone"
+        type="tel"
+        bind:value={phone}
+        required
+        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
+      />  
 
       <div>
         <label for="confirmPassword" class="block text-sm font-medium text-gray-700">Confirm Password</label>

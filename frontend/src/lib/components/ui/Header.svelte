@@ -2,8 +2,11 @@
   import { createEventDispatcher } from "svelte";
   import { Menu, Search } from "lucide-svelte";
   const dispatch = createEventDispatcher();
-</script>
 
+  export let className = '';
+</script>
+<div class={className}>
+  <slot />
 <header class="flex items-center justify-between h-16 px-4 bg-white border-b shadow-sm">
  
   <button on:click={() => dispatch("toggleSidebar")} class="p-2 rounded hover:bg-gray-100">
@@ -29,4 +32,6 @@
       <span class="text-sm">Logout</span>
     </button>
   </div>
+
 </header>
+</div>

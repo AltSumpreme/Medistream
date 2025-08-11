@@ -37,3 +37,12 @@ const (
 	Water GoalType = "WATER"
 	Sleep GoalType = "SLEEP"
 )
+
+type ApptType string
+
+const (
+	ApptTypeConsultation ApptType = "CONSULTATION"
+	ApptTypeFollowup     ApptType = "FOLLOWUP"
+	ApptTypeCheckup      ApptType = "CHECKUP"
+	ApptTypeEmergency    ApptType = "EMERGENCY"
+)

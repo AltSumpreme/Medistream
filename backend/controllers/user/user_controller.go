@@ -22,7 +22,6 @@ func GetUserProfile(c *gin.Context) {
 		"id":        user.ID,
 		"firstName": user.FirstName,
 		"lastName":  user.LastName,
-		"email":     user.Email,
 		"createdAt": user.CreatedAt,
 		"updatedAt": user.UpdatedAt,
 	})
@@ -44,7 +43,6 @@ func UpdateUserProfile(c *gin.Context) {
 
 	user.FirstName = input.FirstName
 	user.LastName = input.LastName
-	user.Email = input.Email
 
 	if err := config.DB.Save(&user).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to update user profile"})
@@ -55,7 +53,6 @@ func UpdateUserProfile(c *gin.Context) {
 		"id":         user.ID,
 		"first_name": user.FirstName,
 		"last_name":  user.LastName,
-		"email":      user.Email,
 		"role":       user.Role,
 		"created_at": user.CreatedAt,
 		"updated_at": user.UpdatedAt,
@@ -86,7 +83,6 @@ func UpdateUserProfile(c *gin.Context) {
 		"id":        user.ID,
 		"firstName": user.FirstName,
 		"lastName":  user.LastName,
-		"email":     user.Email,
 		"createdAt": user.CreatedAt,
 		"updatedAt": user.UpdatedAt,
 	})

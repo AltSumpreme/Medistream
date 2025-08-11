@@ -11,12 +11,13 @@ const loginUser = async (email : string , password : string) => {
 }
 
 
-const registerUser = async (firstName: string, lastName: string, email: string, password: string) => {
+const registerUser = async (firstName: string, lastName: string, email: string, password: string, phone: string) => {
     const response = await api.post("/auth/signup", {
         firstName,
         lastName,
         email,
         password,
+        phone
     });
 
     return response.data;

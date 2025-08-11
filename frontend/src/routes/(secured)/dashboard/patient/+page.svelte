@@ -1,6 +1,6 @@
 <script lang="ts">
   import Sidebar from '$lib/components/ui/SideBar.svelte';
-  import PatientHeader from '$lib/components/ui/PatientHeader.svelte';
+  import Header from '$lib/components/ui/Header.svelte';
   import PatientDashboard from '$lib/components/PatientDashboard.svelte';
   
 
@@ -12,7 +12,7 @@
 <div class="flex flex-col h-screen">
 
   <header class="shrink-0">
-    <PatientHeader on:toggleSidebar={toggleSidebar} />
+    <Header on:toggleSidebar={toggleSidebar} />
   </header>
 
   

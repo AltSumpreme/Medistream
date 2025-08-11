@@ -7,6 +7,7 @@ declare global {
 			user?: {
 				user_id: string;
 				role: string;
+				token: string;
 			};
 		}
 		// interface PageData {}

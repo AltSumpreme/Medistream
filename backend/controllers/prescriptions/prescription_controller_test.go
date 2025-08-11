@@ -45,8 +45,6 @@ func seedPrescriptionUser(role models.Role) models.User {
 		ID:        uuid.New(),
 		FirstName: "Rx",
 		LastName:  "Tester",
-		Email:     email,
-		Password:  "test123",
 		Role:      role,
 	}
 	config.DB.Create(&user)

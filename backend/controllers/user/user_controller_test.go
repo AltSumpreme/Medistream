@@ -45,8 +45,6 @@ func createTestUser(role models.Role) models.User {
 		ID:        uuid.New(),
 		FirstName: "Test",
 		LastName:  "User",
-		Email:     fmt.Sprintf("testuser+%d@example.com", time.Now().UnixNano()),
-		Password:  "hashedpassword",
 		Role:      role,
 	}
 	config.DB.Create(&user)
@@ -65,7 +63,6 @@ func TestGetUserProfile(t *testing.T) {
 	var body map[string]interface{}
 	err := json.Unmarshal(res.Body.Bytes(), &body)
 	assert.NoError(t, err)
-	assert.Equal(t, user.Email, body["email"])
 }
 
 func TestUpdateUserProfile(t *testing.T) {

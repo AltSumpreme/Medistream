@@ -50,8 +50,6 @@ func seedTestUser(role models.Role) models.User {
 		ID:        uuid.New(),
 		FirstName: "Vital",
 		LastName:  "Test",
-		Email:     email,
-		Password:  "test123",
 		Role:      role,
 	}
 	config.DB.Create(&user)

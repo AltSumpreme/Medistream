@@ -1,15 +1,12 @@
-import {redirect} from '@sveltejs/kit';
+// src/routes/dashboard/+layout.server.ts
+import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
-
 export const load: LayoutServerLoad = async ({ locals }) => {
-    if (!locals.user) {
-//        throw redirect(302, '/login');
-    }
+	const user = locals.user;
+    
 
+	if (!user) throw redirect(302, '/login'); // global guard
 
-
-    return {
-        user: locals.user
-    };
-}
+	return { user }; // only include basic info needed globally
+};

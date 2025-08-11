@@ -19,6 +19,7 @@ func SignUp(c *gin.Context) {
 		LastName  string `json:"lastname" binding:"required"`
 		Email     string `json:"email" binding:"required,email"`
 		Password  string ` json:"password" binding:"required,min=8"`
+		Phone     string `json:"phone" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 
@@ -27,11 +28,10 @@ func SignUp(c *gin.Context) {
 		return
 	}
 
-	var existingUser models.User
+	var existingAuth models.Auth
 
-	if err := config.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
+	if err := config.DB.Where("email = ?", input.Email).First(&existingAuth).Error; err == nil {
 		utils.Log.Warnf("SignUp: Email already exists - %s", input.Email)
-		// If the user already exists, return an error
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Email already exists"})
 		return
 	}
@@ -45,18 +45,30 @@ func SignUp(c *gin.Context) {
 		return
 	}
 
-	user := models.User{
-		FirstName: input.FirstName,
-		LastName:  input.LastName,
-		Email:     input.Email,
-		Password:  string(hashedpassword),
+	auth := models.Auth{
+		Email:    input.Email,
+		Password: string(hashedpassword),
 	}
 
-	if err := config.DB.Create(&user).Error; err != nil {
+	if err := config.DB.Create(&auth).Error; err != nil {
 		utils.Log.Errorf("Signup: Failed to create user %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
+
+	user := models.User{
+		AuthID:    auth.ID,
+		FirstName: input.FirstName,
+		LastName:  input.LastName,
+		Role:      models.RolePatient,
+		Phone:     input.Phone,
+	}
+	if err := config.DB.Create(&user).Error; err != nil {
+		utils.Log.Errorf("SignUp: Failed to create user profile - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user profile"})
+		return
+	}
+
 	patient := models.Patient{
 		UserID: user.ID,
 	}
@@ -80,20 +92,27 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	var user models.User
-	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+	var auth models.Auth
+	if err := config.DB.Where("email = ?", input.Email).First(&auth).Error; err != nil {
 		utils.Log.Errorf("Login:Invalid email or password- %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
 
-	if err := utils.VerifyPassword(user.Password, input.Password); err != nil {
+	if err := utils.VerifyPassword(auth.Password, input.Password); err != nil {
 		utils.Log.Warnf("Login:Invalid password - %v,", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid  password"})
 		return
 	}
 
-	accessToken, err := utils.GenerateJWT(user.ID, string(user.Role))
+	var user models.User
+	if err := config.DB.Where("auth_id = ?", auth.ID).First(&user).Error; err != nil {
+		utils.Log.Errorf("Login:Failed to find user profile - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find user profile"})
+		return
+	}
+
+	accessToken, err := utils.GenerateJWT(auth.ID, string(user.Role))
 	if err != nil {
 		utils.Log.Errorf("Login: Failed to generate token - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
@@ -117,9 +136,10 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create refresh token"})
 		return
 	}
+
+	c.SetCookie("access_token", accessToken, 7200, "/", "", false, true)
 	c.JSON(http.StatusOK, gin.H{
-		"message":      "User logged in successfully",
-		"access_token": accessToken,
+		"message": "User logged in successfully",
 	})
 }
 
@@ -146,6 +166,7 @@ func VerifyToken(c *gin.Context) {
 		"role":     claims.Role,
 		"issuedAt": claims.IssuedAt,
 		"expires":  claims.ExpiresAt,
+		"token":    tokenStr,
 	})
 }
 
@@ -172,9 +193,10 @@ func RefreshAccessToken(c *gin.Context) {
 	}
 
 	accessToken, _ := utils.GenerateJWT(stored.UserID, string(stored.User.Role))
+	c.SetCookie("access_token", accessToken, 7200, "/", "", false, true)
 	c.JSON(http.StatusOK, gin.H{
-		"message":      "Access token refreshed successfully",
-		"access_token": accessToken})
+		"message": "Access token refreshed successfully",
+	})
 
 }
 
@@ -191,12 +213,14 @@ func Logout(c *gin.Context) {
 	if err != nil {
 		utils.Log.Warnf("Logout:Invalid or Expired token")
 		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid or expired  token"})
+		return
 	}
 	if err := config.DB.Model(&models.RefreshToken{}).Where("user_id=? AND revoked = false", claims.UserID).Update("revoked", true).Error; err != nil {
 		utils.Log.Errorf("Logout: Failed to revoke refresh token - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke refresh token"})
 		return
 	}
+	c.SetCookie("access_token", "", -1, "/", "", false, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "User logged out successfully"})
 }
