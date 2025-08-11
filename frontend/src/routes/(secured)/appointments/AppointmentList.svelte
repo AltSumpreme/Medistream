@@ -13,7 +13,7 @@
   let selectedAppointmentId: string | null = null;
   let appointments: Appointment[] = data.appointments;
 
-  const { user } = data;
+ // const { user } = data;
 
 
 

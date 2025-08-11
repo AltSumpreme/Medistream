@@ -3,7 +3,6 @@ package middleware
 import (
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/utils"
@@ -12,13 +11,13 @@ import (
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			log.Println("Authorization header missing or malformed")
+		cookie, err := c.Cookie("access_token")
+		if err != nil || cookie == "" {
+			log.Println("Authorization cookie missing or malformed")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing or malformed token"})
 			return
 		}
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		tokenStr := cookie
 
 		claims, err := utils.ValidateJWT(tokenStr)
 		if err != nil {

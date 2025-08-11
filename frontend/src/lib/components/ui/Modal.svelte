@@ -49,9 +49,7 @@ function handleBackdropClick(event: MouseEvent){
     </div>
   </section>
 
-   <div class="p-4 border-t border-gray-200">
-      <slot name="footer" />
-    </div>
+   
 </div>
 
 

@@ -5,10 +5,12 @@
 	import type { Appointment } from '../../../lib/types/appointment';
 
 	export let onClose: () => void;
-	export let userRole: 'PATIENT' | 'DOCTOR' | 'ADMIN'; // pass in from parent
+	export let userRole: 'PATIENT' | 'DOCTOR' | 'ADMIN'; 
 
 	let isSubmitting = false;
 	let error = '';
+	let date = '';
+	let time = '';
 
 	let formData: Partial<Appointment> = {
 		patientId: '',
@@ -19,17 +21,28 @@
 		AppointmentType: 'Consultation'
 	};
 
+	function combineDateTime(date: string, time: string) {
+		if (!date || !time) return '';
+		return `${date}T${time}`;
+	}
 	const handleSubmit = async (e: Event) => {
 		e.preventDefault();
 		error = '';
 		isSubmitting = true;
 
 		try {
+
+			const payload ={
+				...formData,
+				appointmentDate: combineDateTime(date,time),
+				duration : Number(formData.duration),
+				
+			};
 			// If patient, do not allow location to be set from client
 			if (userRole === 'PATIENT') {
-				delete formData.Location;
+				delete payload.Location;
 			}
-			await createAppointment(formData);
+			await createAppointment(payload);
 			onClose();
 		} catch (err) {
 			console.error('Error creating appointment:', err);
@@ -56,13 +69,13 @@
 				<label class="mb-1 flex items-center gap-1 text-sm font-medium">
 					<Calendar class="w-4" /> Date
 				</label>
-				<input type="date" required bind:value={formData.appointmentDate} class="w-full rounded border p-2" />
+				<input type="date" required bind:value={date} class="w-full rounded border p-2" />
 			</div>
 			<div>
 				<label class="mb-1 flex items-center gap-1 text-sm font-medium">
 					<Clock class="w-4" /> Time
 				</label>
-				<input type="time" required bind:value={formData} class="w-full rounded border p-2" />
+				<input type="time" required bind:value={time} class="w-full rounded border p-2" />
 			</div>
 		</div>
 
