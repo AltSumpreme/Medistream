@@ -60,14 +60,14 @@ func GetVitalsByPatientID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Patient ID is required"})
 		return
 	}
-	switch user.Role {
+	switch models.Role(user.Role) {
 	case models.RolePatient:
-		if user.ID.String() != patientID {
+		if user.ID != patientID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized access to another patient's data"})
 			return
 		}
 	case models.RoleDoctor:
-		hasAccess, err := utils.DoctorHasAccessToPatient(user.ID, uuid.MustParse(patientID), c)
+		hasAccess, err := utils.DoctorHasAccessToPatient(user.UserID, uuid.MustParse(patientID), c)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Access check failed"})
 			return
@@ -128,9 +128,9 @@ func GetVitalByID(c *gin.Context) {
 		return
 	}
 
-	switch user.Role {
+	switch models.Role(user.Role) {
 	case models.RolePatient:
-		if vital.PatientID != user.ID {
+		if vital.PatientID != user.UserID {
 			utils.Log.Warnf("GetVitalByID: Unauthorized access by patient to vital")
 			c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this vital record"})
 			return

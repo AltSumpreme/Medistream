@@ -25,6 +25,8 @@ var (
 	TestAdminUser   models.User
 	TestDoctorUser  models.User
 	TestPatientUser models.User
+	TestDoctor      models.Doctor
+	TestPatient     models.Patient
 )
 
 func init() {
@@ -36,12 +38,29 @@ func init() {
 	}
 	config.ConnectDB()
 
+	// Seed base users
 	TestAdminUser = seedUser(models.RoleAdmin)
 	TestDoctorUser = seedUser(models.RoleDoctor)
 	TestPatientUser = seedUser(models.RolePatient)
 
-	config.DB.FirstOrCreate(&models.Doctor{ID: TestDoctorUser.ID, UserID: TestDoctorUser.ID})
-	config.DB.FirstOrCreate(&models.Patient{ID: TestPatientUser.ID, UserID: TestPatientUser.ID})
+	// Seed doctor with independent ID
+	TestDoctor = models.Doctor{
+		ID:             uuid.New(),
+		UserID:         TestDoctorUser.ID,
+		Specialization: "General",
+	}
+	if err := config.DB.FirstOrCreate(&TestDoctor, models.Doctor{UserID: TestDoctorUser.ID}).Error; err != nil {
+		log.Fatalf("failed to seed doctor: %v", err)
+	}
+
+	// Seed patient with independent ID
+	TestPatient = models.Patient{
+		ID:     uuid.New(),
+		UserID: TestPatientUser.ID,
+	}
+	if err := config.DB.FirstOrCreate(&TestPatient, models.Patient{UserID: TestPatientUser.ID}).Error; err != nil {
+		log.Fatalf("failed to seed patient: %v", err)
+	}
 }
 
 func seedUser(role models.Role) models.User {
@@ -53,11 +72,10 @@ func seedUser(role models.Role) models.User {
 		return user
 	}
 
-	// Create Auth entry first
 	auth := models.Auth{
 		ID:       uuid.New(),
 		Email:    email,
-		Password: "hashed_dummy_password", // In production, hash it properly
+		Password: "hashed_dummy_password",
 	}
 	if err := config.DB.Create(&auth).Error; err != nil {
 		log.Fatalf("failed to seed auth: %v", err)
@@ -79,10 +97,9 @@ func seedUser(role models.Role) models.User {
 	return user
 }
 
-func injectTestUser(user models.User) gin.HandlerFunc {
+func injectTestUser(claims *utils.JWTClaims) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Set("jwtPayload", &user)
-		c.Set("user", &user)
+		c.Set("jwtPayload", claims)
 		c.Next()
 	}
 }
@@ -95,30 +112,27 @@ func testRoleChecker(allowedRoles ...models.Role) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		log.Printf("val type: %T", val)
-		userPtr, ok := val.(*models.User)
-		if !ok || userPtr == nil {
+
+		claims, ok := val.(*utils.JWTClaims)
+		if !ok || claims == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "User type assertion failed"})
 			c.Abort()
 			return
 		}
 
-		user := *userPtr
-
-		if slices.Contains(allowedRoles, user.Role) {
+		if slices.Contains(allowedRoles, models.Role(claims.Role)) {
 			c.Next()
 			return
 		}
 
-		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Forbidden: role '%s' not permitted", user.Role)})
+		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Forbidden: role '%s' not permitted", claims.Role)})
 		c.Abort()
 	}
 }
 
-func setupRouterWithTestRoutes(user models.User) *gin.Engine {
+func setupRouterWithTestRoutes(claims *utils.JWTClaims) *gin.Engine {
 	r := gin.Default()
-	r.Use(injectTestUser(user))
-	r.Use(gin.Logger())
+	r.Use(injectTestUser(claims))
 
 	rg := r.Group("/appointments")
 	rg.POST("/", testRoleChecker(models.RolePatient, models.RoleDoctor, models.RoleAdmin), appointments.CreateAppointment)
@@ -140,29 +154,37 @@ func createTestAppointment(patientID, doctorID uuid.UUID) models.Appointment {
 		ID:              uuid.New(),
 		PatientID:       patientID,
 		DoctorID:        doctorID,
-		AppointmentDate: time.Now().Add(100 * time.Hour),
-		Duration:        30,
+		AppointmentDate: time.Now().Add(48 * time.Hour),
+		StartTime:       "10:00",
+		EndTime:         "10:30",
+		Notes:           "Initial Test Appointment",
 		Location:        "Test Room",
 		Mode:            "Online",
-		AppointmentType: models.ApptType("Consultation"),
-		Status:          models.AppointmentStatusPending,
+		Status:          models.AppointmentStatus("PENDING"),
+		AppointmentType: models.ApptType("CONSULTATION"),
 	}
-	config.DB.Create(&appt)
+	if err := config.DB.Create(&appt).Error; err != nil {
+		log.Fatalf("failed to create test appointment: %v", err)
+	}
 	return appt
 }
 
 // -------------------- TESTS -----------------------
 
 func TestCreateAppointment(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
+	claims := &utils.JWTClaims{
+		UserID: TestPatientUser.ID,
+		Role:   string(models.RolePatient),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
 	body := map[string]interface{}{
-		"patient_id":       TestPatientUser.ID,
-		"doctor_id":        TestDoctorUser.ID,
-		"appointment_date": time.Now().Add(200 * time.Hour).Format(time.RFC3339),
-		"duration":         45,
-		"appointment_type": "CONSULTATION",
-		"location":         "Room A",
-		"mode":             "Online",
+		"doctorId":        TestDoctor.ID,
+		"appointmentDate": time.Now().Add(200 * time.Hour).Format(time.RFC3339),
+		"startTime":       "14:00",
+		"endTime":         "14:30",
+		"appointmentType": "CONSULTATION",
+		"mode":            "Online",
 	}
 	jsonBody, _ := json.Marshal(body)
 	req := httptest.NewRequest("POST", "/appointments/", bytes.NewBuffer(jsonBody))
@@ -176,7 +198,12 @@ func TestCreateAppointment(t *testing.T) {
 }
 
 func TestGetAllAppointments(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
 
 	req := httptest.NewRequest("GET", "/appointments/", nil)
 	res := httptest.NewRecorder()
@@ -187,8 +214,13 @@ func TestGetAllAppointments(t *testing.T) {
 }
 
 func TestGetAppointmentByID(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
-	appt := createTestAppointment(TestPatientUser.ID, TestDoctorUser.ID)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
+	appt := createTestAppointment(TestPatient.ID, TestDoctor.ID)
 
 	req := httptest.NewRequest("GET", "/appointments/"+appt.ID.String(), nil)
 	res := httptest.NewRecorder()
@@ -199,14 +231,20 @@ func TestGetAppointmentByID(t *testing.T) {
 }
 
 func TestUpdateAppointment(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
-	appt := createTestAppointment(TestPatientUser.ID, TestDoctorUser.ID)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
+	appt := createTestAppointment(TestPatient.ID, TestDoctor.ID)
 
 	update := map[string]interface{}{
 		"patient_id":       TestPatientUser.ID,
 		"doctor_id":        TestDoctorUser.ID,
 		"appointment_date": time.Now().Add(72 * time.Hour).Format(time.RFC3339),
-		"duration":         60,
+		"start_time":       "11:00",
+		"end_time":         "11:30",
 		"notes":            "Updated notes",
 		"appointment_type": "FOLLOWUP",
 		"location":         "Updated Room",
@@ -225,8 +263,13 @@ func TestUpdateAppointment(t *testing.T) {
 }
 
 func TestDeleteAppointment(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
-	appt := createTestAppointment(TestPatientUser.ID, TestDoctorUser.ID)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
+	appt := createTestAppointment(TestPatient.ID, TestDoctor.ID)
 
 	req := httptest.NewRequest("DELETE", "/appointments/"+appt.ID.String(), nil)
 	res := httptest.NewRecorder()
@@ -237,8 +280,13 @@ func TestDeleteAppointment(t *testing.T) {
 }
 
 func TestCancelAppointment(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
-	appt := createTestAppointment(TestPatientUser.ID, TestDoctorUser.ID)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
+	appt := createTestAppointment(TestPatient.ID, TestDoctor.ID)
 
 	req := httptest.NewRequest("PUT", "/appointments/cancel/"+appt.ID.String(), nil)
 	res := httptest.NewRecorder()
@@ -249,13 +297,19 @@ func TestCancelAppointment(t *testing.T) {
 }
 
 func TestRescheduleAppointment(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
-	appt := createTestAppointment(TestPatientUser.ID, TestDoctorUser.ID)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
+	appt := createTestAppointment(TestPatient.ID, TestDoctor.ID)
 
 	body := map[string]interface{}{
-		"date":     time.Now().Add(96 * time.Hour).Format(time.RFC3339),
-		"duration": 60,
-		"mode":     "In-Person",
+		"date":       time.Now().Add(96 * time.Hour).Format(time.RFC3339),
+		"start_time": "4:00",
+		"end_time":   "4:30",
+		"mode":       "In-Person",
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -270,8 +324,13 @@ func TestRescheduleAppointment(t *testing.T) {
 }
 
 func TestChangeAppointmentStatus(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
-	appt := createTestAppointment(TestPatientUser.ID, TestDoctorUser.ID)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
+	appt := createTestAppointment(TestPatient.ID, TestDoctor.ID)
 
 	body := map[string]interface{}{
 		"status": "COMPLETED",
@@ -288,10 +347,15 @@ func TestChangeAppointmentStatus(t *testing.T) {
 }
 
 func TestGetAppointmentByDoctorID(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
-	_ = createTestAppointment(TestPatientUser.ID, TestDoctorUser.ID)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
+	_ = createTestAppointment(TestPatient.ID, TestDoctor.ID)
 
-	req := httptest.NewRequest("GET", "/appointments/doctor/"+TestDoctorUser.ID.String(), nil)
+	req := httptest.NewRequest("GET", "/appointments/doctor/"+TestDoctor.ID.String(), nil)
 	res := httptest.NewRecorder()
 	router.ServeHTTP(res, req)
 
@@ -300,10 +364,15 @@ func TestGetAppointmentByDoctorID(t *testing.T) {
 }
 
 func TestGetAppointmentByPatientID(t *testing.T) {
-	router := setupRouterWithTestRoutes(TestAdminUser)
-	_ = createTestAppointment(TestPatientUser.ID, TestDoctorUser.ID)
+	claims := &utils.JWTClaims{
+		UserID: TestAdminUser.ID,
+		Role:   string(models.RoleAdmin),
+		Exp:    time.Now().Add(time.Hour).Unix(),
+	}
+	router := setupRouterWithTestRoutes(claims)
+	_ = createTestAppointment(TestPatient.ID, TestDoctor.ID)
 
-	req := httptest.NewRequest("GET", "/appointments/patient/"+TestPatientUser.ID.String(), nil)
+	req := httptest.NewRequest("GET", "/appointments/patient/"+TestPatient.ID.String(), nil)
 	res := httptest.NewRecorder()
 	router.ServeHTTP(res, req)
 

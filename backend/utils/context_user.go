@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/AltSumpreme/Medistream.git/models"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,7 +21,7 @@ func RoleChecker(allowedRoles ...models.Role) gin.HandlerFunc {
 			return
 		}
 
-		if !slices.Contains(allowedRoles, user.Role) {
+		if !slices.Contains(allowedRoles, models.Role(user.Role)) {
 			log.Printf("Access denied for user %s with role %s", user.ID, user.Role)
 			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 			c.Abort()
@@ -31,13 +32,13 @@ func RoleChecker(allowedRoles ...models.Role) gin.HandlerFunc {
 
 }
 
-func GetCurrentUser(c *gin.Context) (*models.User, error) {
+func GetCurrentUser(c *gin.Context) (*JWTClaims, error) {
 	val, exists := c.Get("jwtPayload")
 	if !exists {
 		log.Println("JWT payload not found in context")
 		return nil, errors.New("JWT payload not found in context")
 	}
-	user, ok := val.(*models.User)
+	user, ok := val.(*JWTClaims)
 	if !ok {
 		log.Println("Invalid JWT payload type in context")
 		return nil, errors.New("invalid JWT payload type in context")

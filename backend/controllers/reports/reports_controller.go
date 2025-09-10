@@ -16,18 +16,12 @@ type ReportInput struct {
 	Description     string    `json:"description" binding:"required"`
 	FileURL         string    `json:"file_url" binding:"required"`
 	PatientID       uuid.UUID `json:"patient_id" binding:"required"`
+	DoctorID        uuid.UUID `json:"doctor_id" binding:"required"`
 	MedicalRecordID uuid.UUID `json:"medical_record_id" binding:"required"`
 }
 
 func CreateReport(c *gin.Context) {
 	var input ReportInput
-
-	user, err := utils.GetCurrentUser(c)
-	if err != nil {
-		utils.Log.Warnf("Failed to get current user: %v", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.Log.Warnf("Failed to bind JSON: %v", err)
@@ -39,7 +33,7 @@ func CreateReport(c *gin.Context) {
 		Title:           input.Title,
 		Description:     input.Description,
 		FileURL:         input.FileURL,
-		DoctorID:        user.ID,
+		DoctorID:        input.DoctorID,
 		PatientID:       input.PatientID,
 		MedicalRecordID: &input.MedicalRecordID,
 	}

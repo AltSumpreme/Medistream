@@ -1,4 +1,4 @@
-package user
+package user_test
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
+	"github.com/AltSumpreme/Medistream.git/controllers/user"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
@@ -25,29 +26,45 @@ func init() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 	utils.InitLogger()
-
 	config.ConnectDB()
 }
 
 func setupUserRouter() *gin.Engine {
 	r := gin.Default()
-	r.GET("/users/:id", GetUserProfile)
-	r.PUT("/users/:id", UpdateUserProfile)
-	r.POST("/users/promote/:id", PromoteUser)
+	r.GET("/users/:id", user.GetUserProfile)
+	r.PUT("/users/:id", user.UpdateUserProfile)
+	r.POST("/users/promote/:id", user.PromotePatienttoDoctor)
 	return r
 }
 
-func createTestUser(role models.Role) models.User {
-	tx := config.DB.Begin()
+// helper: create an Auth record
+func createTestAuth(email string) models.Auth {
+	auth := models.Auth{
+		ID:       uuid.New(),
+		Email:    email,
+		Password: "hashedpassword",
+	}
+	if err := config.DB.Create(&auth).Error; err != nil {
+		panic(err)
+	}
+	return auth
+}
 
-	defer tx.Rollback()
+// helper: create a User with Auth
+func createTestUser(role models.Role) models.User {
+	auth := createTestAuth(fmt.Sprintf("user+%d@example.com", time.Now().UnixNano()))
+
 	user := models.User{
 		ID:        uuid.New(),
+		AuthID:    auth.ID,
 		FirstName: "Test",
 		LastName:  "User",
 		Role:      role,
+		Phone:     "1234567890",
 	}
-	config.DB.Create(&user)
+	if err := config.DB.Create(&user).Error; err != nil {
+		panic(err)
+	}
 	return user
 }
 
@@ -66,9 +83,6 @@ func TestGetUserProfile(t *testing.T) {
 }
 
 func TestUpdateUserProfile(t *testing.T) {
-
-	tx := config.DB.Begin()
-	defer tx.Rollback()
 	router := setupUserRouter()
 	user := createTestUser(models.RolePatient)
 
@@ -88,41 +102,34 @@ func TestUpdateUserProfile(t *testing.T) {
 
 	// Fetch updated user from DB
 	var updated models.User
-	_ = config.DB.First(&updated, "id = ?", user.ID)
+	err := config.DB.First(&updated, "id = ?", user.ID).Error
+	assert.NoError(t, err)
 	assert.Equal(t, "Updated", updated.FirstName)
 }
 
-func TestPromoteUser(t *testing.T) {
-	router := setupUserRouter()
-
-	tx := config.DB.Begin()
-	defer tx.Rollback()
-
-	// Patient -> Doctor
+func TestPromotePatienttoDoctor(t *testing.T) {
+	// Create a patient user
 	patient := createTestUser(models.RolePatient)
-	assert.Equal(t, models.RolePatient, patient.Role)
-	req := httptest.NewRequest("POST", "/users/promote/"+patient.ID.String(), nil)
-	res := httptest.NewRecorder()
-	router.ServeHTTP(res, req)
-	assert.Equal(t, http.StatusOK, res.Code)
-	var promoted models.User
-	config.DB.First(&promoted, "id = ?", patient.ID)
-	assert.Equal(t, models.RoleDoctor, promoted.Role)
 
-	// Doctor -> Admin
-	{ /*	req = httptest.NewRequest("POST", "/users/promote/"+patient.ID.String(), nil)
-			res = httptest.NewRecorder()
-			router.ServeHTTP(res, req)
-			assert.Equal(t, http.StatusOK, res.Code)
+	// Create a test router
+	r := gin.Default()
+	r.PUT("/promote/:id", user.PromotePatienttoDoctor)
 
-			config.DB.First(&promoted, "id = ?", patient.ID)
-			assert.Equal(t, models.RoleAdmin, promoted.Role) */
-	}
+	req, _ := http.NewRequest(http.MethodPut, "/promote/"+patient.ID.String()+"?specialization=GENERAL", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-	// Admin -> Error
-	{ /*req = httptest.NewRequest("POST", "/users/promote/"+patient.ID.String(), nil)
-		res = httptest.NewRecorder()
-		router.ServeHTTP(res, req)
-		assert.Equal(t, http.StatusBadRequest, res.Code) */
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "User promoted to doctor successfully")
+
+	// Verify DB changes
+	var updatedUser models.User
+	err := config.DB.First(&updatedUser, "id = ?", patient.ID).Error
+	assert.NoError(t, err)
+	assert.Equal(t, models.RoleDoctor, updatedUser.Role)
+
+	var doctor models.Doctor
+	err = config.DB.First(&doctor, "user_id = ?", patient.ID).Error
+	assert.NoError(t, err)
+	assert.Equal(t, "GENERAL", doctor.Specialization)
 }

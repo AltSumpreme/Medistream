@@ -112,7 +112,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	accessToken, err := utils.GenerateJWT(auth.ID, string(user.Role))
+	accessToken, err := utils.GenerateJWT(user.ID, string(user.Role))
 	if err != nil {
 		utils.Log.Errorf("Login: Failed to generate token - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})

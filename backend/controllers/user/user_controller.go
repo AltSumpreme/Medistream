@@ -7,6 +7,7 @@ import (
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func GetUserProfile(c *gin.Context) {
@@ -26,6 +27,40 @@ func GetUserProfile(c *gin.Context) {
 		"updatedAt": user.UpdatedAt,
 	})
 }
+
+func GetDoctorsBySpecialization(c *gin.Context) {
+	specialization := c.Query("specialization")
+	if specialization == "" {
+		utils.Log.Warn("GetDoctorsBySpecialization: Specialization Query is missing")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Specialization is required"})
+		return
+	}
+
+	var doctors []models.Doctor
+	if err := config.DB.Preload("User").Where("specialization = ?", specialization).Find(&doctors).Error; err != nil {
+		utils.Log.Errorf("GetDoctorsBySpecialization: Failed to fetch doctors - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	type DoctorResponse struct {
+		DoctorID uuid.UUID `json:"doctor_id"`
+		Name     string    `json:"name"`
+	}
+
+	var response []DoctorResponse
+	for _, doc := range doctors {
+		if doc.User != nil {
+			response = append(response, DoctorResponse{
+				DoctorID: doc.ID,
+				Name:     doc.User.FirstName + " " + doc.User.LastName,
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 func UpdateUserProfile(c *gin.Context) {
 	var userID = c.Param("id")
 	var input models.User
@@ -88,35 +123,45 @@ func UpdateUserProfile(c *gin.Context) {
 	})
 
 }
-func PromoteUser(c *gin.Context) {
-	var userID = c.Param("id")
+
+func PromotePatienttoDoctor(c *gin.Context) {
+	var UserID = c.Param("id")
+	var specialization = c.Query("specialization")
+	if specialization == "" {
+		utils.Log.Warn("PromotePatienttoDoctor: Specialization parameter is missing")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Specialization is required"})
+		return
+	}
 
 	var user models.User
 
-	if err := config.DB.Where("id=?", userID).First(&user).Error; err != nil {
-		utils.Log.Warnf("PromoteUser: User not found - %v", err)
+	if err := config.DB.Where("id=?", UserID).First(&user).Error; err != nil {
+		utils.Log.Warnf("PromotePatienttoDoctor: User not found - %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-
-	switch user.Role {
-	case models.RolePatient:
-		user.Role = models.RoleDoctor
-
-	case models.RoleDoctor:
-
-		user.Role = models.RoleAdmin
-	case models.RoleAdmin:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User is aldready an admin"})
-
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user role"})
+	if user.Role != models.RolePatient {
+		utils.Log.Warnf("PromotePatienttoDoctor: User is not a patient - %v", user.Role)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User is not a patient"})
 		return
 	}
+	user.Role = models.RoleDoctor
+
 	if err := config.DB.Save(&user).Error; err != nil {
-		utils.Log.Errorf("PromoteUser: Failed to promote user - %v", err)
+		utils.Log.Errorf("PromotePatienttoDoctor: Failed to promote user - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to promote user"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "User promoted successfully"})
+	doctor := models.Doctor{
+		ID:             uuid.New(),
+		UserID:         user.ID,
+		Specialization: specialization,
+	}
+	if err := config.DB.Create(&doctor).Error; err != nil {
+		utils.Log.Errorf("PromotePatienttoDoctor: Failed to create doctor profile - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create doctor profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User promoted to doctor successfully"})
 }

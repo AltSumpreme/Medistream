@@ -60,14 +60,14 @@ func GetPrescriptionsByPatientID(c *gin.Context) {
 		return
 	}
 
-	switch user.Role {
+	switch models.Role(user.Role) {
 	case models.RolePatient:
-		if user.ID.String() != patientID {
+		if user.UserID.String() != patientID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this patient's prescriptions"})
 			return
 		}
 	case models.RoleDoctor:
-		hasAccess, err := utils.DoctorHasAccessToPatient(user.ID, uuid.MustParse(patientID), c)
+		hasAccess, err := utils.DoctorHasAccessToPatient(user.UserID, uuid.MustParse(patientID), c)
 		if err != nil {
 			utils.Log.Errorf("Access check failed for doctor %s and patient %s: %v", user.ID, patientID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Access check failed"})
@@ -129,9 +129,9 @@ func GetPrescriptionByID(c *gin.Context) {
 		return
 	}
 
-	switch user.Role {
+	switch models.Role(user.Role) {
 	case models.RolePatient:
-		if prescription.PatientID != user.ID {
+		if prescription.PatientID != user.UserID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this prescription"})
 			return
 		}

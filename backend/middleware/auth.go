@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -26,9 +25,10 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
-		c.Set("jwtPayload", &models.User{
-			ID:   claims.UserID,
-			Role: models.Role(claims.Role),
+		c.Set("jwtPayload", &utils.JWTClaims{
+			UserID: claims.UserID,
+			Role:   claims.Role,
+			Exp:    claims.Exp,
 		})
 		c.Next()
 	}

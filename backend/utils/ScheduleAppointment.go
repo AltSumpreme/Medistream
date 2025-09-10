@@ -4,33 +4,54 @@ import (
 	"errors"
 	"time"
 
-	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/models"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-func ScheduleAppointment(appointment models.Appointment) error {
+func ScheduleAppointment(db *gorm.DB, doctorID uuid.UUID, patientID uuid.UUID, appointmentDate time.Time, start string, end string, excludeID *uuid.UUID) error {
 
-	if appointment.Duration <= 0 {
-		return errors.New("invalid duration: must be greater than 0")
+	layoutTime := "15:04"
+	startTime, err1 := time.Parse(layoutTime, start)
+	endTime, err2 := time.Parse(layoutTime, end)
+	if err1 != nil || err2 != nil {
+		return errors.New("invalid time format, expected HH:MM")
 	}
 
-	if time.Now().After(appointment.AppointmentDate) {
-		return errors.New("invalid date: appointment date must be in the future")
-
+	if !endTime.After(startTime) {
+		return errors.New("end time must be after start time")
 	}
 
-	endtime := appointment.AppointmentDate.Add(time.Duration(appointment.Duration) * time.Minute)
+	// will later have an overlap buffer for after every 5 appointments have a break of 15mins to half and hour
+	overlapCondition := "DATE(appointment_date) = ? AND ((start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?))"
+	var count int64
+	query := db.Model(&models.Appointment{}).
+		Where("patient_id = ?", patientID).
+		Where(overlapCondition, appointmentDate, endTime, startTime, startTime, endTime)
 
-	var conflict int64
-
-	if err := config.DB.Model(&models.Appointment{}).
-		Where("doctor_id = ? AND appointment_date < ? AND (appointment_date + interval '1 minute' * duration) > ?", appointment.DoctorID, endtime, appointment.AppointmentDate).
-		Count(&conflict).Error; err != nil {
-		return errors.New("database error: " + err.Error())
+	if excludeID != nil {
+		query = query.Where("id != ?", *excludeID)
 	}
 
-	if conflict > 0 {
-		return errors.New("appointment conflict: another appointment exists during this time")
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return errors.New("time slot already booked for this doctor")
+	}
+
+	query = db.Model(&models.Appointment{}).Where("doctor_id=?", doctorID).Where(overlapCondition, appointmentDate, endTime, startTime, startTime, endTime)
+	if excludeID != nil {
+		query = query.Where("id != ?", *excludeID)
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return errors.New("time slot already booked for this patient")
 	}
 
 	return nil
