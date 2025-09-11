@@ -1,11 +1,9 @@
 -- +goose Up
 -- +goose StatementBegin
-ALTER TABLE medical_records
-ADD COLUMN notes TEXT NULL;
+CREATE TYPE role AS ENUM ('ADMIN', 'DOCTOR', 'PATIENT');
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-ALTER TABLE medical_records
-DROP COLUMN notes;
+DROP TYPE IF EXISTS role;
 -- +goose StatementEnd
