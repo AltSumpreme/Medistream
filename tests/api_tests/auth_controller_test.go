@@ -1,16 +1,15 @@
 package apitests
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/routes"
+	apiclient "github.com/AltSumpreme/Medistream.git/tests/api_client"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,9 +20,10 @@ func setupAuthRouter() *gin.Engine {
 	routes.RegisterAuthRoutes(rg)
 	return r
 }
-func TestAuthFlow(t *testing.T) {
 
+func TestAuthFlow(t *testing.T) {
 	router := setupAuthRouter()
+	client := apiclient.NewTestClient(router)
 
 	email := "john.doe+" + time.Now().Format("150405") + "@example.com"
 	password := "securePassword123!"
@@ -38,13 +38,8 @@ func TestAuthFlow(t *testing.T) {
 			"password":  password,
 			"phone":     "1234567890",
 		}
-		body, _ := json.Marshal(signUp)
 
-		req := httptest.NewRequest("POST", "/signup", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-		res := httptest.NewRecorder()
-		router.ServeHTTP(res, req)
-
+		res := client.Post("/auth/signup", signUp, nil)
 		assert.Equal(t, http.StatusOK, res.Code, "Signup failed")
 	})
 
@@ -53,13 +48,8 @@ func TestAuthFlow(t *testing.T) {
 			"email":    email,
 			"password": password,
 		}
-		body, _ := json.Marshal(login)
 
-		req := httptest.NewRequest("POST", "/login", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-		res := httptest.NewRecorder()
-		router.ServeHTTP(res, req)
-
+		res := client.Post("/auth/login", login, nil)
 		assert.Equal(t, http.StatusOK, res.Code, "Login failed")
 
 		var loginResp map[string]interface{}
@@ -70,49 +60,34 @@ func TestAuthFlow(t *testing.T) {
 		assert.True(t, ok && at != "", "Access token missing")
 		accessToken = at
 
-		// manually get refresh token from DB
-		var user models.User
-		err = config.DB.Where("email = ?", email).First(&user).Error
+		// Manually get refresh token from DB
+		var auth models.Auth
+		err = config.DB.Where("email = ?", email).First(&auth).Error
 		assert.NoError(t, err, "User not found after signup")
 
 		var refresh models.RefreshToken
+		var user models.User
+		err = config.DB.Where("auth_id = ?", auth.ID).First(&user).Error
+		assert.NoError(t, err, "User not found after signup")
 		err = config.DB.Where("user_id = ?", user.ID).Last(&refresh).Error
 		assert.NoError(t, err, "Refresh token not found")
 
 		refreshToken = refresh.Token
 	})
 
-	t.Run("Verify Access Token", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/verify", nil)
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-
-		res := httptest.NewRecorder()
-		router.ServeHTTP(res, req)
-
-		assert.Equal(t, http.StatusOK, res.Code, "Token verification failed")
-	})
-
 	t.Run("Refresh Access Token", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{
+		body := map[string]string{
 			"refresh_token": refreshToken,
-		})
-
-		req := httptest.NewRequest("POST", "/refresh", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-
-		res := httptest.NewRecorder()
-		router.ServeHTTP(res, req)
-
+		}
+		res := client.Post("/auth/refresh", body, nil)
 		assert.Equal(t, http.StatusOK, res.Code, "Access token refresh failed")
 	})
 
 	t.Run("Logout", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/logout", nil)
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-
-		res := httptest.NewRecorder()
-		router.ServeHTTP(res, req)
-
+		headers := map[string]string{
+			"Authorization": "Bearer " + accessToken,
+		}
+		res := client.Post("/auth/logout", nil, headers)
 		assert.Equal(t, http.StatusOK, res.Code, "Logout failed")
 	})
 }

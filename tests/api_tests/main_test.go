@@ -8,6 +8,7 @@ import (
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/tests/helpers"
 	"github.com/AltSumpreme/Medistream.git/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
@@ -21,6 +22,7 @@ func TestMain(m *testing.M) {
 	helpers.PatchDatabase()
 	utils.InitLogger()
 
+	gin.SetMode(gin.TestMode)
 	// Run Tests
 	code := m.Run()
 

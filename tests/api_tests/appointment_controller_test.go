@@ -51,7 +51,7 @@ func TestCreateAppointment(t *testing.T) {
 	}
 	headers := map[string]string{"Content-Type": "application/json"}
 
-	res := client.Post("/appointments/", body, headers)
+	res := client.Post("/appointments", body, headers)
 	assert.Equal(t, http.StatusCreated, res.Code)
 	assert.Contains(t, res.Body.String(), "Appointment created successfully")
 }
@@ -64,7 +64,7 @@ func TestGetAllAppointments(t *testing.T) {
 	router := setupApptRouterWithClaims(claims)
 	client := apiclient.NewTestClient(router)
 
-	res := client.Get("/appointments/", nil)
+	res := client.Get("/appointments", nil)
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Contains(t, res.Body.String(), "appointments")
 }
