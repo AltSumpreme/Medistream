@@ -6,68 +6,187 @@ import (
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
-	"github.com/AltSumpreme/Medistream.git/controllers/appointments"
 	"github.com/AltSumpreme/Medistream.git/models"
+	"github.com/AltSumpreme/Medistream.git/routes"
 	apiclient "github.com/AltSumpreme/Medistream.git/tests/api_client"
 	"github.com/AltSumpreme/Medistream.git/tests/factories"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
-func setupRouterWithClaims(claims *utils.JWTClaims) *gin.Engine {
+func setupApptRouterWithClaims(claims *utils.JWTClaims) *gin.Engine {
 	r := gin.Default()
 	r.Use(func(c *gin.Context) {
 		c.Set("jwtPayload", claims)
 		c.Next()
 	})
 	rg := r.Group("/appointments")
-	rg.POST("/", appointments.CreateAppointment)
-	rg.GET("/", appointments.GetAllAppointments)
-	rg.GET("/:id", appointments.GetAppointmentByID)
-	rg.PUT("/:id", appointments.UpdateAppointment)
-	rg.PUT("/status/:id", appointments.ChangeAppointmentStatus)
-	rg.PUT("/reschedule/:id", appointments.RescheduleAppointment)
-	rg.PUT("/cancel/:id", appointments.CancelAppointment)
-	rg.GET("/doctor/:id", appointments.GetAppointmentByDoctorID)
-	rg.GET("/patient/:id", appointments.GetAppointmentByPatientID)
-	rg.DELETE("/:id", appointments.DeleteAppointment)
+	routes.RegisterAppointmentRoutes(rg)
 	return r
 }
 
-func TestCreateAppointment(t *testing.T) {
-	if config.DB == nil {
-		t.Fatal("Database connection is not initialized")
-	}
-	db := config.DB
-	Userpatient := factories.SeedUser(db, models.RolePatient)
-	factories.SeedPatient(db, Userpatient)
-	doctor := factories.SeedUser(db, models.RoleDoctor)
-	doc := factories.SeedDoctor(db, doctor)
-	token := factories.GenerateJWT(Userpatient.ID.String(), string(models.RolePatient))
-	claims, err := utils.ValidateJWT(token)
-	if err != nil {
-		t.Fatalf("Failed to validate JWT: %v", err)
-	}
+func makeJWT(userID uuid.UUID, role models.Role) *utils.JWTClaims {
+	token := factories.GenerateJWT(userID.String(), string(role))
+	claims, _ := utils.ValidateJWT(token)
+	return claims
+}
 
-	router := setupRouterWithClaims(claims)
+func TestCreateAppointment(t *testing.T) {
+	db := config.DB
+	userPatient, _, _, doctor, _ := factories.CreateEntries(db)
+	claims := makeJWT(userPatient.ID, models.RolePatient)
+
+	router := setupApptRouterWithClaims(claims)
 	client := apiclient.NewTestClient(router)
 
 	body := map[string]interface{}{
-		"doctorId":        doc.ID,
+		"doctorId":        doctor.ID,
 		"appointmentDate": time.Now().Add(200 * time.Hour).Format(time.RFC3339),
 		"startTime":       "14:00",
 		"endTime":         "14:30",
 		"appointmentType": "CONSULTATION",
 		"mode":            "Online",
 	}
-
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
+	headers := map[string]string{"Content-Type": "application/json"}
 
 	res := client.Post("/appointments/", body, headers)
-
 	assert.Equal(t, http.StatusCreated, res.Code)
 	assert.Contains(t, res.Body.String(), "Appointment created successfully")
+}
+
+func TestGetAllAppointments(t *testing.T) {
+	db := config.DB
+	admin := factories.SeedUser(db, models.RoleAdmin)
+	claims := makeJWT(admin.ID, models.RoleAdmin)
+
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	res := client.Get("/appointments/", nil)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "appointments")
+}
+
+func TestGetAppointmentByID(t *testing.T) {
+	db := config.DB
+	_, patient, _, doctor, _ := factories.CreateEntries(db)
+	admin := factories.SeedUser(db, models.RoleAdmin)
+	appt := factories.CreateAppointment(db, patient.ID, doctor.ID)
+
+	claims := makeJWT(admin.ID, models.RoleAdmin)
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	res := client.Get("/appointments/"+appt.ID.String(), nil)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "appointment")
+}
+
+func TestUpdateAppointment(t *testing.T) {
+	db := config.DB
+	_, patient, _, doctor, _ := factories.CreateEntries(db)
+	admin := factories.SeedUser(db, models.RoleAdmin)
+	appt := factories.CreateAppointment(db, patient.ID, doctor.ID)
+
+	claims := makeJWT(admin.ID, models.RoleAdmin)
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	update := map[string]interface{}{
+		"notes":            "Updated test notes",
+		"appointmentType":  "FOLLOWUP",
+		"startTime":        "15:00",
+		"endTime":          "15:30",
+		"appointment_date": time.Now().Add(72 * time.Hour).Format(time.RFC3339),
+	}
+	headers := map[string]string{"Content-Type": "application/json"}
+
+	res := client.Put("/appointments/"+appt.ID.String(), update, headers)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "Appointment updated successfully")
+}
+
+func TestDeleteAppointment(t *testing.T) {
+	db := config.DB
+	_, patient, _, doctor, _ := factories.CreateEntries(db)
+	admin := factories.SeedUser(db, models.RoleAdmin)
+	appt := factories.CreateAppointment(db, patient.ID, doctor.ID)
+
+	claims := makeJWT(admin.ID, models.RoleAdmin)
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	res := client.Delete("/appointments/"+appt.ID.String(), nil)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "Appointment deleted successfully")
+}
+
+func TestCancelAppointment(t *testing.T) {
+	db := config.DB
+	_, patient, _, doctor, _ := factories.CreateEntries(db)
+	admin := factories.SeedUser(db, models.RoleAdmin)
+	appt := factories.CreateAppointment(db, patient.ID, doctor.ID)
+
+	claims := makeJWT(admin.ID, models.RoleAdmin)
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	res := client.Put("/appointments/cancel/"+appt.ID.String(), nil, nil)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "Appointment cancelled")
+}
+
+func TestRescheduleAppointment(t *testing.T) {
+	db := config.DB
+	_, patient, _, doctor, _ := factories.CreateEntries(db)
+	admin := factories.SeedUser(db, models.RoleAdmin)
+	appt := factories.CreateAppointment(db, patient.ID, doctor.ID)
+
+	claims := makeJWT(admin.ID, models.RoleAdmin)
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	body := map[string]interface{}{
+		"date":       time.Now().Add(96 * time.Hour).Format(time.RFC3339),
+		"start_time": "16:00",
+		"end_time":   "16:30",
+		"mode":       "In-Person",
+	}
+	headers := map[string]string{"Content-Type": "application/json"}
+
+	res := client.Put("/appointments/reschedule/"+appt.ID.String(), body, headers)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "Appointment rescheduled")
+}
+
+func TestGetAppointmentByDoctorID(t *testing.T) {
+	db := config.DB
+	_, patient, _, doctor, _ := factories.CreateEntries(db)
+	admin := factories.SeedUser(db, models.RoleAdmin)
+	_ = factories.CreateAppointment(db, patient.ID, doctor.ID)
+
+	claims := makeJWT(admin.ID, models.RoleAdmin)
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	res := client.Get("/appointments/doctor/"+doctor.ID.String(), nil)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "appointments")
+}
+
+func TestGetAppointmentByPatientID(t *testing.T) {
+	db := config.DB
+	_, patient, _, doctor, _ := factories.CreateEntries(db)
+	admin := factories.SeedUser(db, models.RoleAdmin)
+	_ = factories.CreateAppointment(db, patient.ID, doctor.ID)
+
+	claims := makeJWT(admin.ID, models.RoleAdmin)
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	res := client.Get("/appointments/patient/"+patient.ID.String(), nil)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "appointments")
 }

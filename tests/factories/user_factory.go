@@ -70,3 +70,17 @@ func SeedDoctor(db *gorm.DB, user models.User) models.Doctor {
 	}
 	return doctor
 }
+
+func CreateEntries(db *gorm.DB) (models.User, models.Patient, models.User, models.Doctor, models.User) {
+	// Seed patient
+	userPatient := SeedUser(db, models.RolePatient)
+	patient := SeedPatient(db, userPatient)
+
+	// Seed doctor
+	userDoctor := SeedUser(db, models.RoleDoctor)
+	doctor := SeedDoctor(db, userDoctor)
+
+	userAdmin := SeedUser(db, models.RoleAdmin)
+
+	return userPatient, patient, userDoctor, doctor, userAdmin
+}

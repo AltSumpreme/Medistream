@@ -4,12 +4,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-func CreateAppointment(patientID, doctorID uuid.UUID) models.Appointment {
+func CreateAppointment(db *gorm.DB, patientID, doctorID uuid.UUID) models.Appointment {
 	appt := models.Appointment{
 		ID:              uuid.New(),
 		PatientID:       patientID,
@@ -24,7 +24,7 @@ func CreateAppointment(patientID, doctorID uuid.UUID) models.Appointment {
 		AppointmentType: models.ApptType("CONSULTATION"),
 	}
 
-	if err := config.DB.Create(&appt).Error; err != nil {
+	if err := db.Create(&appt).Error; err != nil {
 		log.Fatalf("failed to create appointment: %v", err)
 	}
 

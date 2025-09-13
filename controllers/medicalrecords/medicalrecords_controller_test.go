@@ -53,7 +53,7 @@ func seedUser(role models.Role) models.User {
 		auth = models.Auth{
 			ID:       uuid.New(),
 			Email:    email,
-			Password: password, // You might want to hash this in real app logic
+			Password: password,
 		}
 		config.DB.Create(&auth)
 	}
