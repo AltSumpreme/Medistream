@@ -31,7 +31,7 @@ func setupRouter() *gin.Engine {
 	r := gin.Default()
 	r.POST("/signup", SignUp)
 	r.POST("/login", Login)
-	r.GET("/verify", VerifyToken)
+
 	r.POST("/refresh", RefreshAccessToken)
 	r.POST("/logout", Logout)
 	return r

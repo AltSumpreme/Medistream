@@ -22,6 +22,14 @@ func main() {
 	// Initialize the database connection
 	config.ConnectDB()
 
+	// Initialize Redis
+	config.InitRedis()
+
+	// Set Gin to release mode in production
+	if gin.Mode() != gin.DebugMode {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	router := gin.Default()
 
 	router.Use(cors.New(cors.Config{
@@ -35,6 +43,7 @@ func main() {
 
 	routes.RegisterRoutes(router)
 
+	log.Println("Starting server on :8080")
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

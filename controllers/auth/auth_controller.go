@@ -144,33 +144,34 @@ func Login(c *gin.Context) {
 	})
 }
 
-func VerifyToken(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		utils.Log.Warnf("Verify Token: Missing or malformed token")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing or malformed token"})
-		return
+/*
+	func VerifyToken(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			utils.Log.Warnf("Verify Token: Missing or malformed token")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing or malformed token"})
+			return
+		}
+
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+
+		claims, err := utils.ValidateJWT(tokenStr)
+		if err != nil {
+			utils.Log.Warnf("Verify Token: Failed to validate JWT Token - %v", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "token is valid",
+			"user_id":  claims.UserID,
+			"role":     claims.Role,
+			"issuedAt": claims.IssuedAt,
+			"expires":  claims.ExpiresAt,
+			"token":    tokenStr,
+		})
 	}
-
-	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-
-	claims, err := utils.ValidateJWT(tokenStr)
-	if err != nil {
-		utils.Log.Warnf("Verify Token: Failed to validate JWT Token - %v", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "token is valid",
-		"user_id":  claims.UserID,
-		"role":     claims.Role,
-		"issuedAt": claims.IssuedAt,
-		"expires":  claims.ExpiresAt,
-		"token":    tokenStr,
-	})
-}
-
+*/
 func RefreshAccessToken(c *gin.Context) {
 	var input struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`

@@ -6,10 +6,13 @@ import (
 )
 
 func RegisterRoutes(r *gin.Engine) {
+
 	auth := r.Group("/auth")
+	auth.Use(middleware.StrictRateLimiterMiddleware())
 	RegisterAuthRoutes(auth)
 
 	protected := r.Group("/")
+	protected.Use(middleware.RateLimiterMiddleware())
 	protected.Use(middleware.AuthMiddleware())
 
 	RegisterUserRoutes(protected.Group("/user"))
