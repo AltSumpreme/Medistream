@@ -1,12 +1,15 @@
 package appointments
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/models"
+	"github.com/AltSumpreme/Medistream.git/services/cache"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -121,17 +124,32 @@ func GetAppointmentByID(c *gin.Context) {
 	user, _ := utils.GetCurrentUser(c)
 	var appointment models.Appointment
 
+	if models.Role(user.Role) != models.RoleAdmin && (appointment.PatientID != user.UserID || appointment.DoctorID != user.UserID) {
+		utils.Log.Warnf("GetAppointmentByID: You are not authorised to access this appointment")
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
+	// cache
+	cachekey := fmt.Sprintf("cache:appointment:%s", appointmentID)
+	val, err := config.Rdb.Get(config.Ctx, cachekey).Result()
+	if err == nil {
+		var appointment models.Appointment
+		if jsonErr := json.Unmarshal([]byte(val), &appointment); jsonErr == nil {
+			c.JSON(http.StatusOK, gin.H{"appointment": appointment})
+			return
+		}
+	}
+
 	if err := config.DB.WithContext(c.Request.Context()).Preload("Patient").Preload("Doctor").Where("id = ?", appointmentID).First(&appointment).Error; err != nil {
 		utils.Log.Errorf("GetAppointmentByID: Appointment not found - %v", err)
 		c.JSON(404, gin.H{"error": "Appointment not found - " + err.Error()})
 		return
 	}
 
-	if models.Role(user.Role) != models.RoleAdmin && (appointment.PatientID != user.UserID || appointment.DoctorID != user.UserID) {
-		utils.Log.Warnf("GetAppointmentByID: You are not authorised to access this appointment")
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
-		return
-	}
+	//store in cache
+	data, _ := json.Marshal(appointment)
+	config.Rdb.Set(config.Ctx, cachekey, data, 5*time.Minute)
 
 	c.JSON(200, gin.H{"appointment": appointment})
 }
@@ -228,6 +246,10 @@ func UpdateAppointment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update appointment"})
 		return
 	}
+
+	appointmentCache := cache.NewAppointmentCache(config.Rdb, config.Ctx)
+
+	appointmentCache.Invalidate(appointmentID, appt.DoctorID.String(), appt.PatientID.String())
 
 	c.JSON(http.StatusOK, gin.H{"message": "Appointment updated successfully", "appointment": appt})
 }
@@ -391,6 +413,16 @@ func GetAppointmentByDoctorID(c *gin.Context) {
 	}
 
 	var appointments []models.Appointment
+
+	cachekey := fmt.Sprintf("cache:doctor_appointments:doctor:%s:limit:%d:offset:%d", doctorID, limit, offset)
+	val, err := config.Rdb.Get(config.Ctx, cachekey).Result()
+	if err == nil {
+		if jsonErr := json.Unmarshal([]byte(val), &appointments); jsonErr == nil {
+			c.JSON(http.StatusOK, gin.H{"appointments": appointments})
+			return
+		}
+	}
+
 	if err := config.DB.WithContext(c.Request.Context()).
 		Where("doctor_id = ?", doctorID).
 		Order("appointment_date desc").
@@ -401,6 +433,9 @@ func GetAppointmentByDoctorID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch appointments"})
 		return
 	}
+	data, _ := json.Marshal(appointments)
+	config.Rdb.Set(config.Ctx, cachekey, data, 5*time.Minute).Result()
+
 	c.JSON(http.StatusOK, gin.H{"appointments": appointments})
 }
 
@@ -438,6 +473,15 @@ func GetAppointmentByPatientID(c *gin.Context) {
 	}
 
 	var appointments []models.Appointment
+
+	cachekey := fmt.Sprintf("cache:patient_appointment:patientID %s:limit: %d:offset:%d", patientID, limit, offset)
+	val, err := config.Rdb.Get(config.Ctx, cachekey).Result()
+	if err == nil {
+		if jsonErr := json.Unmarshal([]byte(val), &appointments); jsonErr == nil {
+			c.JSON(http.StatusOK, gin.H{"appointments:": appointments})
+			return
+		}
+	}
 	db := config.DB.WithContext(c.Request.Context()).Preload("Patient").
 		Where("patient_id = ?", patientID).
 		Order("appointment_date desc").
@@ -454,6 +498,8 @@ func GetAppointmentByPatientID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch appointments"})
 		return
 	}
+	data, _ := json.Marshal(appointments)
+	config.Rdb.Set(config.Ctx, cachekey, data, 5*time.Minute)
 
 	c.JSON(http.StatusOK, gin.H{"appointments": appointments})
 }
