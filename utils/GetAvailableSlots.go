@@ -8,7 +8,6 @@ import (
 )
 
 func GetAvailableSlots(db *gorm.DB, doctorID uuid.UUID, appointmentDate time.Time) ([]string, error) {
-	// Fetch doctor's working hours for that weekday
 	var workingHours struct {
 		StartTime string
 		EndTime   string
@@ -24,7 +23,7 @@ func GetAvailableSlots(db *gorm.DB, doctorID uuid.UUID, appointmentDate time.Tim
 		return nil, err
 	}
 	if workingHours.StartTime == "" || workingHours.EndTime == "" {
-		return []string{}, nil // no working hours for that day
+		return []string{}, nil
 	}
 
 	// Parse start/end times
@@ -49,7 +48,6 @@ func GetAvailableSlots(db *gorm.DB, doctorID uuid.UUID, appointmentDate time.Tim
 		return nil, err
 	}
 
-	// Convert booked slots to map for quick lookup
 	booked := make(map[string]bool)
 	for _, slot := range bookedSlots {
 		booked[slot.StartTime] = true

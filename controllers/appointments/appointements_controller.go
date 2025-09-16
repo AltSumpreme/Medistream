@@ -153,233 +153,6 @@ func GetAppointmentByID(c *gin.Context) {
 
 	c.JSON(200, gin.H{"appointment": appointment})
 }
-
-func UpdateAppointment(c *gin.Context) {
-	appointmentID := c.Param("id")
-
-	user, err := utils.GetCurrentUser(c)
-	if err != nil {
-		utils.Log.Warnf("UpdateAppointment: Unauthorized access - %v", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: " + err.Error()})
-		return
-	}
-
-	// Fetch appointment
-	var appt models.Appointment
-	if err := config.DB.WithContext(c).First(&appt, "id = ?", appointmentID).Error; err != nil {
-		utils.Log.Errorf("UpdateAppointment: Appointment not found - %v", err)
-		c.JSON(http.StatusNotFound, gin.H{"error": "Appointment not found"})
-		return
-	}
-
-	// Role-based checks
-	switch models.Role(user.Role) {
-	case models.RolePatient:
-		if user.UserID != appt.PatientID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to update this appointment"})
-			return
-		}
-		if appt.Status == "ACCEPTED" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "You cannot update an accepted appointment"})
-			return
-		}
-
-	case models.RoleDoctor:
-		if user.UserID != appt.DoctorID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to update this appointment"})
-			return
-		}
-
-	case models.RoleAdmin:
-		// Admin can always update
-	default:
-		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid role"})
-		return
-	}
-
-	// Bind input into temp struct
-	var input AppointmentUpdateInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
-		return
-	}
-
-	// Validate role-specific fields before applying
-	if input.Location != "" && user.Role == string(models.RolePatient) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only doctor or admin can update location"})
-		return
-	}
-
-	if input.StartTime != "" && input.EndTime != "" {
-		if err := utils.ScheduleAppointment(
-			config.DB,
-			appt.DoctorID,
-			appt.PatientID,
-			appt.AppointmentDate,
-			input.StartTime,
-			input.EndTime,
-			&appt.ID); err != nil {
-			utils.Log.Warnf("UpdateAppointment: Conflict in scheduling the appointment")
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-	}
-
-	if input.StartTime != "" {
-		appt.StartTime = input.StartTime
-	}
-	if input.EndTime != "" {
-		appt.EndTime = input.EndTime
-	}
-	if input.Mode != "" {
-		appt.Mode = input.Mode
-	}
-	if input.Notes != "" {
-		appt.Notes = input.Notes
-	}
-	if input.Location != "" {
-		appt.Location = input.Location
-	}
-
-	if err := config.DB.Save(&appt).Error; err != nil {
-		utils.Log.Errorf("UpdateAppointment: Failed to update appointment - %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update appointment"})
-		return
-	}
-
-	appointmentCache := cache.NewAppointmentCache(config.Rdb, config.Ctx)
-
-	appointmentCache.Invalidate(appointmentID, appt.DoctorID.String(), appt.PatientID.String())
-
-	c.JSON(http.StatusOK, gin.H{"message": "Appointment updated successfully", "appointment": appt})
-}
-
-func DeleteAppointment(c *gin.Context) {
-	appointmentId := c.Param("id")
-	var appointment models.Appointment
-	if err := config.DB.WithContext(c.Request.Context()).Where("id = ?", appointmentId).First(&appointment).Error; err != nil {
-		utils.Log.Errorf("DeleteAppointment: Appointment not found - %v", err)
-		c.JSON(404, gin.H{"error": "Appointment not found - " + err.Error()})
-		return
-	}
-	if err := config.DB.WithContext(c.Request.Context()).Delete(&appointment).Error; err != nil {
-		utils.Log.Errorf("DeleteAppointment: Failed to delete appointment - %v", err)
-		c.JSON(500, gin.H{"error": "Failed to delete appointment - " + err.Error()})
-		return
-	}
-	utils.Log.Infof("DeleteAppointment: Appointment with ID %s deleted successfully", appointment.ID)
-	c.JSON(200, gin.H{"message": "Appointment deleted successfully"})
-}
-
-func ChangeAppointmentStatus(c *gin.Context) {
-	appointmentID := c.Param("id")
-
-	_, err := utils.GetCurrentUser(c)
-
-	if err != nil {
-		c.JSON(403, gin.H{"error": "Unauthorized: " + err.Error()})
-	}
-
-	var appointment models.Appointment
-
-	if err := config.DB.WithContext(c.Request.Context()).First(&appointment, "id = ?", appointmentID).Error; err != nil {
-		utils.Log.Errorf("ChangeAppointmentStatus: Appointment not found - %v", err)
-		c.JSON(404, gin.H{"error": "Appointment not found - " + err.Error()})
-		return
-	}
-
-	var input AppointmentStatusInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.Log.Warnf("ChangeAppointmentStatus: Invalid input - %v", err)
-		c.JSON(400, gin.H{"error": "Invalid input"})
-		return
-	}
-	appointment.Status = models.AppointmentStatus(input.Status)
-	if err := config.DB.WithContext(c.Request.Context()).Save(&appointment).Error; err != nil {
-		utils.Log.Errorf("ChangeAppointmentStatus: Failed to update appointment status - %v", err)
-		c.JSON(500, gin.H{"error": "Failed to update appointment status - " + err.Error()})
-		return
-	}
-}
-
-func RescheduleAppointment(c *gin.Context) {
-	appointmentID := c.Param("id")
-	user, _ := utils.GetCurrentUser(c)
-
-	var appointment models.Appointment
-	if err := config.DB.First(&appointment, "id = ?", appointmentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Appointment not found"})
-		return
-	}
-
-	if models.Role(user.Role) != models.RoleAdmin && (user.UserID != appointment.PatientID || user.UserID != appointment.DoctorID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You can only reschedule your own appointment"})
-		return
-	}
-
-	if appointment.Status != "PENDING" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only PENDING appointments can be rescheduled"})
-		return
-	}
-
-	var input struct {
-		Date      time.Time `json:"date" binding:"required"`
-		StartTime string    `json:"start_time" binding:"required"`
-		EndTime   string    `json:"end_time" binding:"required"`
-		Mode      string    `json:"mode" binding:"required,oneof=Online In-Person"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-		return
-	}
-
-	appointment.AppointmentDate = input.Date
-	appointment.StartTime = input.StartTime
-	appointment.EndTime = input.EndTime
-	appointment.Mode = input.Mode
-
-	if err := utils.ScheduleAppointment(config.DB, appointment.DoctorID, appointment.PatientID, appointment.AppointmentDate, appointment.StartTime, appointment.EndTime, &appointment.ID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if err := config.DB.Save(&appointment).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reschedule"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Appointment rescheduled", "appointment": appointment})
-}
-
-func CancelAppointment(c *gin.Context) {
-	appointmentID := c.Param("id")
-	user, exists := utils.GetCurrentUser(c)
-	if exists != nil {
-		utils.Log.Warnf("CancelAppointment:Unauthorised access to the route")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "You have not been authenticated"})
-	}
-
-	var appointment models.Appointment
-	if err := config.DB.First(&appointment, "id = ?", appointmentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Appointment not found"})
-		return
-	}
-
-	allowed := models.Role(user.Role) == models.RoleAdmin || user.UserID == appointment.PatientID
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	appointment.Status = "CANCELLED"
-	if err := config.DB.Save(&appointment).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Appointment cancelled"})
-}
-
 func GetAppointmentByDoctorID(c *gin.Context) {
 	doctorID := c.Param("id")
 	user, err := utils.GetCurrentUser(c)
@@ -522,10 +295,20 @@ func GetAvailableSlots(c *gin.Context) {
 	}
 
 	appointmentDate, err := time.Parse("2006-01-02", dateParam)
+
 	if err != nil {
 		utils.Log.Warnf("GetAvailableSlots: Invalid date format - %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
 		return
+	}
+	cacheKey := fmt.Sprintf("cache:doctorSchedule:%s:%s", doctorID.String(), appointmentDate.Format("2006-01-02"))
+	val, err := config.Rdb.Get(config.Ctx, cacheKey).Result()
+	if err == nil {
+		var slots []string
+		if jsonErr := json.Unmarshal([]byte(val), &slots); jsonErr == nil {
+			c.JSON(http.StatusOK, gin.H{"availableSlots": slots})
+			return
+		}
 	}
 
 	slots, err := utils.GetAvailableSlots(config.DB, doctorID, appointmentDate)
@@ -535,5 +318,238 @@ func GetAvailableSlots(c *gin.Context) {
 		return
 	}
 
+	data, _ := json.Marshal(slots)
+	config.Rdb.Set(config.Ctx, cacheKey, data, 5*time.Minute)
+
 	c.JSON(http.StatusOK, gin.H{"availableSlots": slots})
+}
+
+func UpdateAppointment(c *gin.Context) {
+	appointmentID := c.Param("id")
+
+	user, err := utils.GetCurrentUser(c)
+	if err != nil {
+		utils.Log.Warnf("UpdateAppointment: Unauthorized access - %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: " + err.Error()})
+		return
+	}
+
+	// Fetch appointment
+	var appt models.Appointment
+	if err := config.DB.WithContext(c).First(&appt, "id = ?", appointmentID).Error; err != nil {
+		utils.Log.Errorf("UpdateAppointment: Appointment not found - %v", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Appointment not found"})
+		return
+	}
+
+	// Role-based checks
+	switch models.Role(user.Role) {
+	case models.RolePatient:
+		if user.UserID != appt.PatientID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to update this appointment"})
+			return
+		}
+		if appt.Status == "ACCEPTED" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You cannot update an accepted appointment"})
+			return
+		}
+
+	case models.RoleDoctor:
+		if user.UserID != appt.DoctorID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to update this appointment"})
+			return
+		}
+
+	case models.RoleAdmin:
+		// Admin can always update
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid role"})
+		return
+	}
+
+	// Bind input into temp struct
+	var input AppointmentUpdateInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
+		return
+	}
+
+	// Validate role-specific fields before applying
+	if input.Location != "" && user.Role == string(models.RolePatient) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only doctor or admin can update location"})
+		return
+	}
+
+	if input.StartTime != "" && input.EndTime != "" {
+		if err := utils.ScheduleAppointment(
+			config.DB,
+			appt.DoctorID,
+			appt.PatientID,
+			appt.AppointmentDate,
+			input.StartTime,
+			input.EndTime,
+			&appt.ID); err != nil {
+			utils.Log.Warnf("UpdateAppointment: Conflict in scheduling the appointment")
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	if input.StartTime != "" {
+		appt.StartTime = input.StartTime
+	}
+	if input.EndTime != "" {
+		appt.EndTime = input.EndTime
+	}
+	if input.Mode != "" {
+		appt.Mode = input.Mode
+	}
+	if input.Notes != "" {
+		appt.Notes = input.Notes
+	}
+	if input.Location != "" {
+		appt.Location = input.Location
+	}
+
+	if err := config.DB.Save(&appt).Error; err != nil {
+		utils.Log.Errorf("UpdateAppointment: Failed to update appointment - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update appointment"})
+		return
+	}
+
+	appointmentCache := cache.NewAppointmentCache(config.Rdb, config.Ctx)
+
+	appointmentCache.Invalidate(appointmentID, appt.DoctorID.String(), appt.PatientID.String(), appt.AppointmentDate.Format("2006-01-02"))
+
+	c.JSON(http.StatusOK, gin.H{"message": "Appointment updated successfully", "appointment": appt})
+}
+
+func DeleteAppointment(c *gin.Context) {
+	appointmentId := c.Param("id")
+	var appointment models.Appointment
+	if err := config.DB.WithContext(c.Request.Context()).Where("id = ?", appointmentId).First(&appointment).Error; err != nil {
+		utils.Log.Errorf("DeleteAppointment: Appointment not found - %v", err)
+		c.JSON(404, gin.H{"error": "Appointment not found - " + err.Error()})
+		return
+	}
+	if err := config.DB.WithContext(c.Request.Context()).Delete(&appointment).Error; err != nil {
+		utils.Log.Errorf("DeleteAppointment: Failed to delete appointment - %v", err)
+		c.JSON(500, gin.H{"error": "Failed to delete appointment - " + err.Error()})
+		return
+	}
+	appointmentCache := cache.NewAppointmentCache(config.Rdb, config.Ctx)
+	appointmentCache.Invalidate(appointmentId, appointment.DoctorID.String(), appointment.PatientID.String(), appointment.AppointmentDate.Format("2006-01-02"))
+	utils.Log.Infof("DeleteAppointment: Appointment with ID %s deleted successfully", appointment.ID)
+	c.JSON(200, gin.H{"message": "Appointment deleted successfully"})
+}
+
+func ChangeAppointmentStatus(c *gin.Context) {
+	appointmentID := c.Param("id")
+
+	_, err := utils.GetCurrentUser(c)
+
+	if err != nil {
+		c.JSON(403, gin.H{"error": "Unauthorized: " + err.Error()})
+	}
+
+	var appointment models.Appointment
+
+	if err := config.DB.WithContext(c.Request.Context()).First(&appointment, "id = ?", appointmentID).Error; err != nil {
+		utils.Log.Errorf("ChangeAppointmentStatus: Appointment not found - %v", err)
+		c.JSON(404, gin.H{"error": "Appointment not found - " + err.Error()})
+		return
+	}
+
+	var input AppointmentStatusInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.Log.Warnf("ChangeAppointmentStatus: Invalid input - %v", err)
+		c.JSON(400, gin.H{"error": "Invalid input"})
+		return
+	}
+	appointment.Status = models.AppointmentStatus(input.Status)
+	if err := config.DB.WithContext(c.Request.Context()).Save(&appointment).Error; err != nil {
+		utils.Log.Errorf("ChangeAppointmentStatus: Failed to update appointment status - %v", err)
+		c.JSON(500, gin.H{"error": "Failed to update appointment status - " + err.Error()})
+		return
+	}
+}
+
+func RescheduleAppointment(c *gin.Context) {
+	appointmentID := c.Param("id")
+	user, _ := utils.GetCurrentUser(c)
+
+	var appointment models.Appointment
+	if err := config.DB.First(&appointment, "id = ?", appointmentID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Appointment not found"})
+		return
+	}
+
+	if models.Role(user.Role) != models.RoleAdmin && (user.UserID != appointment.PatientID || user.UserID != appointment.DoctorID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only reschedule your own appointment"})
+		return
+	}
+
+	if appointment.Status != "PENDING" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only PENDING appointments can be rescheduled"})
+		return
+	}
+
+	var input struct {
+		Date      time.Time `json:"date" binding:"required"`
+		StartTime string    `json:"start_time" binding:"required"`
+		EndTime   string    `json:"end_time" binding:"required"`
+		Mode      string    `json:"mode" binding:"required,oneof=Online In-Person"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	appointment.AppointmentDate = input.Date
+	appointment.StartTime = input.StartTime
+	appointment.EndTime = input.EndTime
+	appointment.Mode = input.Mode
+
+	if err := utils.ScheduleAppointment(config.DB, appointment.DoctorID, appointment.PatientID, appointment.AppointmentDate, appointment.StartTime, appointment.EndTime, &appointment.ID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := config.DB.Save(&appointment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reschedule"})
+		return
+	}
+	appointmentCache := cache.NewAppointmentCache(config.Rdb, config.Ctx)
+	appointmentCache.Invalidate(appointmentID, appointment.DoctorID.String(), appointment.PatientID.String(), appointment.AppointmentDate.Format("2006-01-02"))
+
+	c.JSON(http.StatusOK, gin.H{"message": "Appointment rescheduled", "appointment": appointment})
+}
+
+func CancelAppointment(c *gin.Context) {
+	appointmentID := c.Param("id")
+	user, exists := utils.GetCurrentUser(c)
+	if exists != nil {
+		utils.Log.Warnf("CancelAppointment:Unauthorised access to the route")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "You have not been authenticated"})
+	}
+
+	var appointment models.Appointment
+	if err := config.DB.First(&appointment, "id = ?", appointmentID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Appointment not found"})
+		return
+	}
+
+	allowed := models.Role(user.Role) == models.RoleAdmin || user.UserID == appointment.PatientID
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	appointment.Status = "CANCELLED"
+	if err := config.DB.Save(&appointment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Appointment cancelled"})
 }

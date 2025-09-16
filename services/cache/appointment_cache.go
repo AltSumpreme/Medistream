@@ -19,12 +19,12 @@ func NewAppointmentCache(rdb *redis.Client, ctx context.Context) *AppointmentCac
 	}
 }
 
-func (ac *AppointmentCache) Invalidate(appointmentID, doctorID, patientID string) {
+func (ac *AppointmentCache) Invalidate(appointmentID, doctorID, patientID, date string) {
 	keys := []string{
 		fmt.Sprintf("cache:appointment:%s", appointmentID),
 		fmt.Sprintf("cache:appointments:doctor:%s*", doctorID),
 		fmt.Sprintf("cache:appointments:patient:%s*", patientID),
-		//	fmt.Sprintf("cache:doctorSchedule:%s:%s", doctorID, date),
+		fmt.Sprintf("cache:doctorSchedule:%s:%s", doctorID, date),
 	}
 
 	for _, key := range keys {
