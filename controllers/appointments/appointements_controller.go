@@ -503,3 +503,37 @@ func GetAppointmentByPatientID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"appointments": appointments})
 }
+
+func GetAvailableSlots(c *gin.Context) {
+	doctorIDParam := c.Query("doctorId")
+	dateParam := c.Query("date")
+
+	if doctorIDParam == "" || dateParam == "" {
+		utils.Log.Warnf("GetAvailableSlots: Missing required query parameters")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "doctorId and date query parameters are required"})
+		return
+	}
+
+	doctorID, err := uuid.Parse(doctorIDParam)
+	if err != nil {
+		utils.Log.Warnf("GetAvailableSlots: Invalid doctorId format - %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid doctorId format"})
+		return
+	}
+
+	appointmentDate, err := time.Parse("2006-01-02", dateParam)
+	if err != nil {
+		utils.Log.Warnf("GetAvailableSlots: Invalid date format - %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+		return
+	}
+
+	slots, err := utils.GetAvailableSlots(config.DB, doctorID, appointmentDate)
+	if err != nil {
+		utils.Log.Errorf("GetAvailableSlots: Failed to retrieve slots - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve available slots"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"availableSlots": slots})
+}
