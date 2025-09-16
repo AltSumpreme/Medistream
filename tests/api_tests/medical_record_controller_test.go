@@ -124,7 +124,7 @@ func TestSofttDeleteMedicalRecord(t *testing.T) {
 
 	headers := map[string]string{"Content-Type": "application/json"}
 
-	res := client.Delete("/medicalrecords/soft/"+record.ID.String(), headers)
+	res := client.Delete("/medicalrecords/soft-delete/"+record.ID.String(), headers)
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Contains(t, res.Body.String(), "Medical record deleted successfully")
 }
@@ -140,7 +140,7 @@ func TestHardDeleteMedicalRecord(t *testing.T) {
 
 	headers := map[string]string{"Content-Type": "application/json"}
 
-	res := client.Delete("/medicalrecords/hard/"+record.ID.String(), headers)
+	res := client.Delete("/medicalrecords/hard-delete/"+record.ID.String(), headers)
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Contains(t, res.Body.String(), "Medical record permanently deleted")
 }

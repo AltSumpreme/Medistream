@@ -243,7 +243,7 @@ func SoftDeleteMedicalRecord(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Medical record soft deleted"})
+	c.JSON(http.StatusOK, gin.H{"message": "Medical record  deleted"})
 }
 
 func HardDeleteMedicalRecord(c *gin.Context) {
@@ -260,5 +260,5 @@ func HardDeleteMedicalRecord(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Medical record hard deleted"})
+	c.JSON(http.StatusOK, gin.H{"message": "Medical record  deleted"})
 }

@@ -31,7 +31,7 @@ func ConnectDB() {
 	log.Println("Database connection established (sql.DB)")
 
 	// Run Goose migrations
-	migrationsDir := "migrations"
+	migrationsDir := os.Getenv("MIGRATIONS_DIR")
 	if err := goose.Up(sqlDB, migrationsDir); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
 	}

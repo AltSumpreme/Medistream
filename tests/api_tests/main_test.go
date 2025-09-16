@@ -17,7 +17,10 @@ func TestMain(m *testing.M) {
 	if err := godotenv.Load("../../.env"); err != nil {
 		log.Fatalf("failed to load .env: %v", err)
 	}
+	os.Setenv("MIGRATIONS_DIR", "../../migrations")
+
 	config.ConnectDB()
+	config.InitRedis()
 	helpers.SetupTestDatabase()
 	helpers.PatchDatabase()
 	utils.InitLogger()

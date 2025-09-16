@@ -10,6 +10,7 @@ import (
 	"github.com/AltSumpreme/Medistream.git/routes"
 	apiclient "github.com/AltSumpreme/Medistream.git/tests/api_client"
 	"github.com/AltSumpreme/Medistream.git/tests/factories"
+	"github.com/AltSumpreme/Medistream.git/tests/middleware"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,6 +19,7 @@ import (
 
 func setupApptRouterWithClaims(claims *utils.JWTClaims) *gin.Engine {
 	r := gin.Default()
+	r.Use(middleware.RequestTimer())
 	r.Use(func(c *gin.Context) {
 		c.Set("jwtPayload", claims)
 		c.Next()
@@ -54,6 +56,34 @@ func TestCreateAppointment(t *testing.T) {
 	res := client.Post("/appointments", body, headers)
 	assert.Equal(t, http.StatusCreated, res.Code)
 	assert.Contains(t, res.Body.String(), "Appointment created successfully")
+}
+
+func TestAppointmentCacheOnCreate(t *testing.T) {
+	db := config.DB
+	userPatient, _, _, doctor, _ := factories.CreateEntries(db)
+	claims := makeJWT(userPatient.ID, models.RolePatient)
+
+	router := setupApptRouterWithClaims(claims)
+	client := apiclient.NewTestClient(router)
+
+	body := map[string]interface{}{
+		"doctorId":        doctor.ID,
+		"appointmentDate": time.Now().Add(200 * time.Hour).Format(time.RFC3339),
+		"startTime":       "14:00",
+		"endTime":         "14:30",
+		"appointmentType": "CONSULTATION",
+		"mode":            "Online",
+	}
+	headers := map[string]string{"Content-Type": "application/json"}
+
+	res := client.Post("/appointments", body, headers)
+	assert.Equal(t, http.StatusCreated, res.Code)
+
+	// 🔑 Check Redis cache
+	key := "appointments:doctor:" + doctor.ID.String()
+	cached, err := config.Rdb.Get(config.Ctx, key).Result()
+	assert.NoError(t, err)
+	assert.Contains(t, cached, doctor.ID.String())
 }
 
 func TestGetAllAppointments(t *testing.T) {

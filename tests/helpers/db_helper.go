@@ -42,6 +42,18 @@ func SetupTestDatabase() *gorm.DB {
 	if err := goose.Up(sqlDB, migrationsDir); err != nil {
 		log.Fatalf("Failed to migrate test database: %v", err)
 	}
+	{ /*
+			noisyLogger :=  logger.New(
+					log.New(os.Stdout, "\r\n[DB]", log.LstdFlags), // prefix logs with [DB]
+					logger.Config{
+						SlowThreshold: time.Second, // highlight queries slower than 1s
+						LogLevel:      logger.Info, // log all queries
+						Colorful:      true,
+					},
+				),
+			}
+		*/
+	}
 	gormLogger := logger.Default.LogMode(logger.Silent)
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{Logger: gormLogger})
 	if err != nil {
