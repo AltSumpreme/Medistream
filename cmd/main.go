@@ -2,9 +2,11 @@ package main
 
 import (
 	"log"
+
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
+	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/routes"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-contrib/cors"
@@ -14,11 +16,13 @@ import (
 
 func main() {
 
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load("../.env"); err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 	// Initialize the logger
 	utils.InitLogger()
+	// Initialize metrics
+	metrics.MetricsInit()
 	// Initialize the database connection
 	config.ConnectDB()
 
