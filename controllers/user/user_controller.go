@@ -4,10 +4,12 @@ import (
 	"net/http"
 
 	"github.com/AltSumpreme/Medistream.git/config"
+	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func GetUserProfile(c *gin.Context) {
@@ -15,7 +17,10 @@ func GetUserProfile(c *gin.Context) {
 
 	user := models.User{}
 
-	if err := config.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "get_user_profile", func(db *gorm.DB) error {
+		return db.First(&user, "id = ?", userID).Error
+	})
+	if err != nil {
 		c.JSON(404, gin.H{"error": "User not found"})
 		return
 	}
@@ -37,7 +42,10 @@ func GetDoctorsBySpecialization(c *gin.Context) {
 	}
 
 	var doctors []models.Doctor
-	if err := config.DB.Preload("User").Where("specialization = ?", specialization).Find(&doctors).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "get_doctor_by_specialization", func(db *gorm.DB) error {
+		return db.Preload("User").Where("specialization = ?", specialization).Find(&doctors).Error
+	})
+	if err != nil {
 		utils.Log.Errorf("GetDoctorsBySpecialization: Failed to fetch doctors - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -71,7 +79,9 @@ func UpdateUserProfile(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := config.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := metrics.DbMetrics(config.DB, "get_user_by_id", func(db *gorm.DB) error {
+		return db.Where("id = ?", userID).First(&user).Error
+	}); err != nil {
 		c.JSON(404, gin.H{"error": "User not found"})
 		return
 	}
@@ -79,7 +89,9 @@ func UpdateUserProfile(c *gin.Context) {
 	user.FirstName = input.FirstName
 	user.LastName = input.LastName
 
-	if err := config.DB.Save(&user).Error; err != nil {
+	if err := metrics.DbMetrics(config.DB, "update_user_profile", func(db *gorm.DB) error {
+		return db.Save(&user).Error
+	}); err != nil {
 		c.JSON(500, gin.H{"error": "Failed to update user profile"})
 		return
 	}
@@ -96,13 +108,17 @@ func UpdateUserProfile(c *gin.Context) {
 	if user.Role == models.RoleDoctor {
 		if input.Doctor != nil {
 			var doctor models.Doctor
-			if err := config.DB.First(&doctor, "user_id = ?", user.ID).Error; err != nil {
+			if err := metrics.DbMetrics(config.DB, "get_doctor_by_user_id", func(db *gorm.DB) error {
+				return db.First(&doctor, "user_id = ?", user.ID).Error
+			}); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Doctor profile not found"})
 				return
 			}
 
 			doctor.Specialization = input.Doctor.Specialization
-			if err := config.DB.Save(&doctor).Error; err != nil {
+			if err := metrics.DbMetrics(config.DB, "update_doctor_specialization", func(db *gorm.DB) error {
+				return db.Save(&doctor).Error
+			}); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update specialization"})
 				return
 			}
@@ -135,7 +151,9 @@ func PromotePatienttoDoctor(c *gin.Context) {
 
 	var user models.User
 
-	if err := config.DB.Where("id=?", UserID).First(&user).Error; err != nil {
+	if err := metrics.DbMetrics(config.DB, "get_user_by_id", func(db *gorm.DB) error {
+		return db.Where("id=?", UserID).First(&user).Error
+	}); err != nil {
 		utils.Log.Warnf("PromotePatienttoDoctor: User not found - %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
@@ -147,7 +165,9 @@ func PromotePatienttoDoctor(c *gin.Context) {
 	}
 	user.Role = models.RoleDoctor
 
-	if err := config.DB.Save(&user).Error; err != nil {
+	if err := metrics.DbMetrics(config.DB, "promote_user_to_doctor", func(db *gorm.DB) error {
+		return db.Save(&user).Error
+	}); err != nil {
 		utils.Log.Errorf("PromotePatienttoDoctor: Failed to promote user - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to promote user"})
 		return
@@ -157,7 +177,9 @@ func PromotePatienttoDoctor(c *gin.Context) {
 		UserID:         user.ID,
 		Specialization: specialization,
 	}
-	if err := config.DB.Create(&doctor).Error; err != nil {
+	if err := metrics.DbMetrics(config.DB, "create_doctor_profile", func(db *gorm.DB) error {
+		return db.Create(&doctor).Error
+	}); err != nil {
 		utils.Log.Errorf("PromotePatienttoDoctor: Failed to create doctor profile - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create doctor profile"})
 		return

@@ -372,7 +372,7 @@ func GetAvailableSlots(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"availableSlots": slots})
 }
 
-func UpdateAppointment(c *gin.Context) {
+func UpdateAppointment(c *gin.Context, appointmentCache *cache.Cache) {
 	appointmentID := c.Param("id")
 
 	user, err := utils.GetCurrentUser(c)
@@ -464,14 +464,12 @@ func UpdateAppointment(c *gin.Context) {
 		return
 	}
 
-	appointmentCache := cache.NewAppointmentCache(config.Rdb, config.Ctx)
-
-	appointmentCache.Invalidate(appointmentID, appt.DoctorID.String(), appt.PatientID.String(), appt.AppointmentDate.Format("2006-01-02"))
+	appointmentCache.AppointmentInvalidate(appointmentID, appt.DoctorID.String(), appt.PatientID.String(), appt.AppointmentDate.Format("2006-01-02"))
 
 	c.JSON(http.StatusOK, gin.H{"message": "Appointment updated successfully", "appointment": appt})
 }
 
-func DeleteAppointment(c *gin.Context) {
+func DeleteAppointment(c *gin.Context, appointmentCache *cache.Cache) {
 	appointmentId := c.Param("id")
 	var appointment models.Appointment
 	if err := config.DB.WithContext(c.Request.Context()).Where("id = ?", appointmentId).First(&appointment).Error; err != nil {
@@ -485,8 +483,8 @@ func DeleteAppointment(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to delete appointment - " + err.Error()})
 		return
 	}
-	appointmentCache := cache.NewAppointmentCache(config.Rdb, config.Ctx)
-	appointmentCache.Invalidate(appointmentId, appointment.DoctorID.String(), appointment.PatientID.String(), appointment.AppointmentDate.Format("2006-01-02"))
+
+	appointmentCache.AppointmentInvalidate(appointmentId, appointment.DoctorID.String(), appointment.PatientID.String(), appointment.AppointmentDate.Format("2006-01-02"))
 	utils.Log.Infof("DeleteAppointment: Appointment with ID %s deleted successfully", appointment.ID)
 	c.JSON(200, gin.H{"message": "Appointment deleted successfully"})
 }
@@ -522,7 +520,7 @@ func ChangeAppointmentStatus(c *gin.Context) {
 	}
 }
 
-func RescheduleAppointment(c *gin.Context) {
+func RescheduleAppointment(c *gin.Context, appointmentCache *cache.Cache) {
 	appointmentID := c.Param("id")
 	user, _ := utils.GetCurrentUser(c)
 
@@ -568,8 +566,8 @@ func RescheduleAppointment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reschedule"})
 		return
 	}
-	appointmentCache := cache.NewAppointmentCache(config.Rdb, config.Ctx)
-	appointmentCache.Invalidate(appointmentID, appointment.DoctorID.String(), appointment.PatientID.String(), appointment.AppointmentDate.Format("2006-01-02"))
+
+	appointmentCache.AppointmentInvalidate(appointmentID, appointment.DoctorID.String(), appointment.PatientID.String(), appointment.AppointmentDate.Format("2006-01-02"))
 
 	c.JSON(http.StatusOK, gin.H{"message": "Appointment rescheduled", "appointment": appointment})
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/routes"
+	"github.com/AltSumpreme/Medistream.git/services/cache"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -45,7 +46,12 @@ func main() {
 	}))
 	router.RedirectTrailingSlash = false
 
-	routes.RegisterRoutes(router)
+	appointmentCache := cache.NewCache(config.Rdb, config.Ctx)
+	medicalrecordsCache := cache.NewCache(config.Rdb, config.Ctx)
+	prescriptionsCache := cache.NewCache(config.Rdb, config.Ctx)
+	reportsCache := cache.NewCache(config.Rdb, config.Ctx)
+
+	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache)
 
 	log.Println("Starting server on :8080")
 	if err := router.Run(":8080"); err != nil {
