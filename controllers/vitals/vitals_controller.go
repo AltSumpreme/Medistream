@@ -1,6 +1,8 @@
 package vitals
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -8,9 +10,11 @@ import (
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/models"
+	"github.com/AltSumpreme/Medistream.git/services/cache"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -98,8 +102,26 @@ func GetVitalsByPatientID(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
+	cachekey := fmt.Sprintf("cache:vitals:patient:%s:limit:%d:offset:%d", patientID, limit, offset)
+
+	val, err := config.Rdb.Get(c, cachekey).Result()
+	switch err {
+	case nil:
+		var vitals []models.Vital
+		if err := json.Unmarshal([]byte(val), &vitals); err == nil {
+			metrics.CacheHits.WithLabelValues("vitals").Inc()
+			c.JSON(http.StatusOK, vitals)
+			return
+		}
+	case redis.Nil:
+		metrics.CacheMisses.WithLabelValues("vitals").Inc()
+	default:
+		metrics.CacheMisses.WithLabelValues("vitals").Inc()
+		utils.Log.Warnf("Redis GET error: %v", err)
+	}
+
 	var vitals []models.Vital
-	err := metrics.DbMetrics(config.DB, "get_vitals", func(db *gorm.DB) error {
+	err = metrics.DbMetrics(config.DB, "get_vitals", func(db *gorm.DB) error {
 		return db.WithContext(c).Where("patient_id = ?", patientID).
 			Limit(limit).
 			Offset(offset).
@@ -110,6 +132,11 @@ func GetVitalsByPatientID(c *gin.Context) {
 		utils.Log.Errorf("Failed to fetch vitals for patient %s: %v", patientID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch vitals"})
 		return
+	}
+	data, _ := json.Marshal(vitals)
+	err = config.Rdb.Set(c, cachekey, data, 5*time.Minute).Err()
+	if err != nil {
+		utils.Log.Warnf("Redis SET error: %v", err)
 	}
 
 	c.JSON(http.StatusOK, vitals)
@@ -169,7 +196,7 @@ func GetVitalByID(c *gin.Context) {
 	c.JSON(http.StatusOK, vital)
 }
 
-func UpdateVital(c *gin.Context) {
+func UpdateVital(c *gin.Context, vitalsCache *cache.Cache) {
 	vitalID := c.Param("id")
 	if vitalID == "" {
 		utils.Log.Warnf("Vital ID is required")
@@ -202,11 +229,21 @@ func UpdateVital(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vital"})
 		return
 	}
+	var vital models.Vital
+	err = metrics.DbMetrics(config.DB, "get_vital_patient", func(db *gorm.DB) error {
+		return db.WithContext(c).Select("patient_id").First(&vital, "id = ?", vitalID).Error
+	})
+	if err != nil {
+		utils.Log.Errorf("Failed to fetch vital %s for cache invalidation: %v", vitalID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vital"})
+		return
+	}
+	vitalsCache.VitalsInvalidate(vital.PatientID.String())
 
 	c.JSON(http.StatusOK, gin.H{"message": "Vital updated successfully"})
 }
 
-func DeleteVital(c *gin.Context) {
+func DeleteVital(c *gin.Context, vitalsCache *cache.Cache) {
 	vitalID := c.Param("id")
 	if vitalID == "" {
 		utils.Log.Warnf("Vital ID is required")
@@ -223,5 +260,15 @@ func DeleteVital(c *gin.Context) {
 		return
 	}
 
+	var vital models.Vital
+	err = metrics.DbMetrics(config.DB, "get_vital_patient", func(db *gorm.DB) error {
+		return db.WithContext(c).Select("patient_id").First(&vital, "id = ?", vitalID).Error
+	})
+	if err != nil {
+		utils.Log.Errorf("Failed to fetch vital %s for cache invalidation: %v", vitalID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete vital"})
+		return
+	}
+	vitalsCache.VitalsInvalidate(vital.PatientID.String())
 	c.JSON(http.StatusOK, gin.H{"message": "Vital soft deleted"})
 }

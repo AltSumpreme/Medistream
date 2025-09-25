@@ -75,9 +75,8 @@ func (c *Cache) ReportInvalidate(patientID string) {
 	}
 }
 
-func (c *Cache) VitalsInvalidate(medicalRecordID, patientID string) {
+func (c *Cache) VitalsInvalidate(patientID string) {
 	keys := []string{
-		fmt.Sprintf("cache:vitals:medicalRecord:%s", medicalRecordID),
 		fmt.Sprintf("cache:vitals:patient:%s*", patientID),
 	}
 

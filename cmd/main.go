@@ -50,8 +50,9 @@ func main() {
 	medicalrecordsCache := cache.NewCache(config.Rdb, config.Ctx)
 	prescriptionsCache := cache.NewCache(config.Rdb, config.Ctx)
 	reportsCache := cache.NewCache(config.Rdb, config.Ctx)
+	vitalsCache := cache.NewCache(config.Rdb, config.Ctx)
 
-	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache)
+	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache, vitalsCache)
 
 	log.Println("Starting server on :8080")
 	if err := router.Run(":8080"); err != nil {

@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *gin.Engine, appointmentCache *cache.Cache, medicalrecordsCache *cache.Cache, prescriptionsCache *cache.Cache, reportsCache *cache.Cache) {
+func RegisterRoutes(r *gin.Engine, appointmentCache *cache.Cache, medicalrecordsCache *cache.Cache, prescriptionsCache *cache.Cache, reportsCache *cache.Cache, vitalsCache *cache.Cache) {
 
 	auth := r.Group("/auth")
 	auth.Use(middleware.StrictRateLimiterMiddleware())
@@ -20,6 +20,6 @@ func RegisterRoutes(r *gin.Engine, appointmentCache *cache.Cache, medicalrecords
 	RegisterAppointmentRoutes(protected.Group("/appointments"), appointmentCache)
 	RegisterMedicalRecordsRoutes(protected.Group("/medical-records"), medicalrecordsCache)
 	RegisterReportRoute(protected.Group("/reports"), reportsCache)
-	RegisterVitalsRoutes(protected.Group("/vitals"))
+	RegisterVitalsRoutes(protected.Group("/vitals"), vitalsCache)
 	RegisterPrescriptionRoutes(protected.Group("/prescriptions"), prescriptionsCache)
 }
