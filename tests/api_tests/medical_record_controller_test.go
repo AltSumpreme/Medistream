@@ -7,6 +7,7 @@ import (
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/routes"
+	"github.com/AltSumpreme/Medistream.git/services/cache"
 	apiclient "github.com/AltSumpreme/Medistream.git/tests/api_client"
 	"github.com/AltSumpreme/Medistream.git/tests/factories"
 	"github.com/AltSumpreme/Medistream.git/utils"
@@ -22,14 +23,15 @@ func setupMRRouterWithClaims(claims *utils.JWTClaims) *gin.Engine {
 		c.Set("jwtPayload", claims)
 		c.Next()
 	})
+	medicalRecordsCache := cache.NewCache(config.Rdb, config.Ctx)
 	rg := r.Group("/medical-records")
-	routes.RegisterMedicalRecordsRoutes(rg)
+	routes.RegisterMedicalRecordsRoutes(rg, medicalRecordsCache)
 	return r
 }
 
 func TestCreateMedicalRecordRoutes(t *testing.T) {
 	db := config.DB
-	claims := makeJWT(uuid.New(), models.RoleDoctor)
+	claims := factories.MakeJWT(uuid.New(), models.RoleDoctor)
 
 	_, patient, _, doctor, _ := factories.CreateEntries(db)
 	router := setupMRRouterWithClaims(claims)
@@ -50,7 +52,7 @@ func TestCreateMedicalRecordRoutes(t *testing.T) {
 
 func TestGetAllMedicalrecords(t *testing.T) {
 	db := config.DB
-	claims := makeJWT(uuid.New(), models.RoleDoctor)
+	claims := factories.MakeJWT(uuid.New(), models.RoleDoctor)
 
 	_, patient, _, doctor, _ := factories.CreateEntries(db)
 	factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
@@ -65,7 +67,7 @@ func TestGetAllMedicalrecords(t *testing.T) {
 
 func TestGetMedicalRecordByID(t *testing.T) {
 	db := config.DB
-	claims := makeJWT(uuid.New(), models.RoleDoctor)
+	claims := factories.MakeJWT(uuid.New(), models.RoleDoctor)
 
 	_, patient, _, doctor, _ := factories.CreateEntries(db)
 	record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
@@ -80,7 +82,7 @@ func TestGetMedicalRecordByID(t *testing.T) {
 
 func TestGetRecordsByPatientID(t *testing.T) {
 	db := config.DB
-	claims := makeJWT(uuid.New(), models.RoleDoctor)
+	claims := factories.MakeJWT(uuid.New(), models.RoleDoctor)
 
 	_, patient, _, doctor, _ := factories.CreateEntries(db)
 	factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
@@ -96,7 +98,7 @@ func TestGetRecordsByPatientID(t *testing.T) {
 
 func TestUpdateMedicalRecords(t *testing.T) {
 	db := config.DB
-	claims := makeJWT(uuid.New(), models.RoleDoctor)
+	claims := factories.MakeJWT(uuid.New(), models.RoleDoctor)
 
 	_, patient, _, doctor, _ := factories.CreateEntries(db)
 	record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
@@ -115,7 +117,7 @@ func TestUpdateMedicalRecords(t *testing.T) {
 
 func TestSofttDeleteMedicalRecord(t *testing.T) {
 	db := config.DB
-	claims := makeJWT(uuid.New(), models.RoleDoctor)
+	claims := factories.MakeJWT(uuid.New(), models.RoleDoctor)
 
 	_, patient, _, doctor, _ := factories.CreateEntries(db)
 	record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
@@ -131,7 +133,7 @@ func TestSofttDeleteMedicalRecord(t *testing.T) {
 
 func TestHardDeleteMedicalRecord(t *testing.T) {
 	db := config.DB
-	claims := makeJWT(uuid.New(), models.RoleAdmin)
+	claims := factories.MakeJWT(uuid.New(), models.RoleAdmin)
 
 	_, patient, _, doctor, _ := factories.CreateEntries(db)
 	record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
