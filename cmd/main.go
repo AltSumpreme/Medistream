@@ -2,10 +2,13 @@ package main
 
 import (
 	"log"
+
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
+	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/routes"
+	"github.com/AltSumpreme/Medistream.git/services/cache"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -14,13 +17,23 @@ import (
 
 func main() {
 
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load("../.env"); err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 	// Initialize the logger
 	utils.InitLogger()
+	// Initialize metrics
+	metrics.MetricsInit()
 	// Initialize the database connection
 	config.ConnectDB()
+
+	// Initialize Redis
+	config.InitRedis()
+
+	// Set Gin to release mode in production
+	if gin.Mode() != gin.DebugMode {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	router := gin.Default()
 
@@ -33,8 +46,15 @@ func main() {
 	}))
 	router.RedirectTrailingSlash = false
 
-	routes.RegisterRoutes(router)
+	appointmentCache := cache.NewCache(config.Rdb, config.Ctx)
+	medicalrecordsCache := cache.NewCache(config.Rdb, config.Ctx)
+	prescriptionsCache := cache.NewCache(config.Rdb, config.Ctx)
+	reportsCache := cache.NewCache(config.Rdb, config.Ctx)
+	vitalsCache := cache.NewCache(config.Rdb, config.Ctx)
 
+	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache, vitalsCache)
+
+	log.Println("Starting server on :8080")
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

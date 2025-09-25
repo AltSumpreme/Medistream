@@ -1,15 +1,21 @@
 package prescriptions
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
+	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/models"
+	"github.com/AltSumpreme/Medistream.git/services/cache"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 type PrescriptionInput struct {
@@ -41,7 +47,10 @@ func CreatePrescription(c *gin.Context) {
 		IssuedAt:        input.IssuedAt,
 	}
 
-	if err := config.DB.WithContext(c).Create(&prescription).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "create_prescription", func(db *gorm.DB) error {
+		return db.WithContext(c).Create(&prescription).Error
+	})
+	if err != nil {
 		utils.Log.Errorf("Failed to create prescription: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create prescription"})
 		return
@@ -59,7 +68,6 @@ func GetPrescriptionsByPatientID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Patient ID is required"})
 		return
 	}
-
 	switch models.Role(user.Role) {
 	case models.RolePatient:
 		if user.UserID.String() != patientID {
@@ -94,17 +102,37 @@ func GetPrescriptionsByPatientID(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
+	cachekey := fmt.Sprintf("cache:prescriptions:patient:%s limit:%d offset:%d", patientID, limit, offset)
+	val, err := config.Rdb.Get(c, cachekey).Result()
+	switch err {
+	case nil:
+		var prescriptions []models.Prescription
+		metrics.CacheHits.WithLabelValues("get_prescription_values").Inc()
+		if err := json.Unmarshal([]byte(val), &prescriptions); err == nil {
+			c.JSON(http.StatusOK, prescriptions)
+			return
+		}
+	case redis.Nil:
+		metrics.CacheMisses.WithLabelValues("get_prescription_values").Inc()
+	default:
+		metrics.CacheMisses.WithLabelValues("get_prescription_values").Inc()
+	}
+
 	var prescriptions []models.Prescription
-	if err := config.DB.WithContext(c).
-		Where("patient_id = ?", patientID).
-		Limit(limit).
-		Offset(offset).
-		Order("issued_at DESC").
-		Find(&prescriptions).Error; err != nil {
+	err = metrics.DbMetrics(config.DB, "get_prescriptions_by_patient_id", func(db *gorm.DB) error {
+		return db.WithContext(c).Where("patient_id = ?", patientID).
+			Limit(limit).
+			Offset(offset).
+			Order("issued_at DESC").
+			Find(&prescriptions).Error
+	})
+	if err != nil {
 		utils.Log.Errorf("Failed to fetch prescriptions: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch prescriptions"})
 		return
 	}
+	data, _ := json.Marshal(prescriptions)
+	config.Rdb.Set(c, cachekey, data, 5*time.Minute)
 
 	c.JSON(http.StatusOK, prescriptions)
 }
@@ -120,10 +148,13 @@ func GetPrescriptionByID(c *gin.Context) {
 	}
 
 	var prescription models.Prescription
-	if err := config.DB.WithContext(c).
-		Preload("Patient").
-		Preload("MedicalRecord").
-		First(&prescription, "id = ?", prescriptionID).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "get_prescription_by_id", func(db *gorm.DB) error {
+		return db.WithContext(c).
+			Preload("Patient").
+			Preload("MedicalRecord").
+			First(&prescription, "id = ?", prescriptionID).Error
+	})
+	if err != nil {
 		utils.Log.Warnf("Prescription not found: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Prescription not found"})
 		return
@@ -143,20 +174,27 @@ func GetPrescriptionByID(c *gin.Context) {
 		}
 
 		var record models.MedicalRecord
-		if err := config.DB.WithContext(c).
-			Select("id").
-			Where("id = ? AND doctor_id = ?", prescription.MedicalRecordID, user.ID).
-			First(&record).Error; err != nil {
+		if err := metrics.DbMetrics(config.DB, "get_medical_record_by_id", func(db *gorm.DB) error {
+			return db.WithContext(c).
+				Select("id").
+				Where("id = ? AND doctor_id = ?", prescription.MedicalRecordID, user.ID).
+				First(&record).Error
+		}); err != nil {
 			utils.Log.Errorf("GetPrescriptionByID: You are not authorized to access this prescription %v", err)
 			c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this prescription"})
 			return
 		}
+	case models.RoleAdmin:
+		// Admin has access to all prescriptions
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this prescription"})
+		return
 	}
 
 	c.JSON(http.StatusOK, prescription)
 }
 
-func UpdatePrescription(c *gin.Context) {
+func UpdatePrescription(c *gin.Context, prescriptionCache *cache.Cache) {
 	prescriptionID := c.Param("id")
 	if prescriptionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Prescription ID is required"})
@@ -179,32 +217,59 @@ func UpdatePrescription(c *gin.Context) {
 		updateData["medical_record_id"] = input.MedicalRecordID
 	}
 
-	if err := config.DB.WithContext(c).
-		Model(&models.Prescription{}).
-		Where("id = ?", prescriptionID).
-		Updates(updateData).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "update_prescription", func(db *gorm.DB) error {
+		return db.WithContext(c).
+			Model(&models.Prescription{}).
+			Where("id = ?", prescriptionID).
+			Updates(updateData).Error
+	})
+	if err != nil {
 		utils.Log.Errorf("Failed to update prescription %s: %v", prescriptionID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prescription"})
 		return
 	}
-
+	var prescription models.Prescription
+	err = metrics.DbMetrics(config.DB, "get_prescription_patient_id", func(db *gorm.DB) error {
+		return db.WithContext(c).
+			Select("patient_id").
+			First(&prescription, "id = ?", prescriptionID).Error
+	})
+	if err != nil {
+		utils.Log.Errorf("Failed to fetch updated prescription %s: %v", prescriptionID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated prescription"})
+		return
+	}
+	prescriptionCache.PrescriptionInvalidate(prescription.PatientID.String())
 	c.JSON(http.StatusOK, gin.H{"message": "Prescription updated successfully"})
 }
 
-func DeletePrescription(c *gin.Context) {
+func DeletePrescription(c *gin.Context, prescriptionCache *cache.Cache) {
 	prescriptionID := c.Param("id")
 	if prescriptionID == "" {
 		utils.Log.Warnf("DeletePrescription: Prescription ID is required")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Prescription ID is required"})
 		return
 	}
+	var prescription models.Prescription
+	if err := metrics.DbMetrics(config.DB, "get_prescription_for_delete", func(db *gorm.DB) error {
+		return db.WithContext(c).
+			Select("id, patient_id").
+			First(&prescription, "id = ?", prescriptionID).Error
+	}); err != nil {
+		utils.Log.Errorf("Prescription not found or fetch failed: %v", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Prescription not found"})
+		return
+	}
 
-	if err := config.DB.WithContext(c).
-		Delete(&models.Prescription{}, "id = ?", prescriptionID).Error; err != nil {
+	if err := metrics.DbMetrics(config.DB, "delete_prescriptions", func(db *gorm.DB) error {
+		return db.WithContext(c).
+			Delete(&models.Prescription{}, "id = ?", prescriptionID).Error
+	}); err != nil {
 		utils.Log.Errorf("Failed to delete prescription: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete prescription"})
 		return
 	}
+	prescriptionCache.PrescriptionInvalidate(prescription.PatientID.String())
 
 	c.JSON(http.StatusOK, gin.H{"message": "Prescription deleted"})
 }

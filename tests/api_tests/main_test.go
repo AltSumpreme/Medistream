@@ -8,6 +8,7 @@ import (
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/tests/helpers"
 	"github.com/AltSumpreme/Medistream.git/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
@@ -16,11 +17,15 @@ func TestMain(m *testing.M) {
 	if err := godotenv.Load("../../.env"); err != nil {
 		log.Fatalf("failed to load .env: %v", err)
 	}
+	os.Setenv("MIGRATIONS_DIR", "../../migrations")
+
 	config.ConnectDB()
+	config.InitRedis()
 	helpers.SetupTestDatabase()
 	helpers.PatchDatabase()
 	utils.InitLogger()
 
+	gin.SetMode(gin.TestMode)
 	// Run Tests
 	code := m.Run()
 

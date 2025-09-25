@@ -71,6 +71,15 @@ func SeedDoctor(db *gorm.DB, user models.User) models.Doctor {
 	return doctor
 }
 
+func ChangeDoctorSpecialization(db *gorm.DB, doctor models.Doctor, specialization string) {
+	if db == nil {
+		log.Fatal("db instance is nil")
+	}
+	doctor.Specialization = specialization
+	if err := db.Save(doctor).Error; err != nil {
+		log.Fatalf("failed to change specialization: %v", err)
+	}
+}
 func CreateEntries(db *gorm.DB) (models.User, models.Patient, models.User, models.Doctor, models.User) {
 	// Seed patient
 	userPatient := SeedUser(db, models.RolePatient)

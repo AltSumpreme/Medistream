@@ -5,7 +5,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/AltSumpreme/Medistream.git/models"
+	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 func GenerateJWT(userID string, role string) string {
@@ -24,4 +27,9 @@ func GenerateJWT(userID string, role string) string {
 	}
 
 	return tok
+}
+func MakeJWT(userID uuid.UUID, role models.Role) *utils.JWTClaims {
+	token := GenerateJWT(userID.String(), string(role))
+	claims, _ := utils.ValidateJWT(token)
+	return claims
 }
