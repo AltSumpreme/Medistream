@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
+	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type VitalInput struct {
@@ -43,7 +45,10 @@ func CreateVital(c *gin.Context) {
 		RecordedAt: input.RecordedAt,
 	}
 
-	if err := config.DB.WithContext(c).Create(&vital).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "create_vitals", func(db *gorm.DB) error {
+		return db.WithContext(c).Create(&vital).Error
+	})
+	if err != nil {
 		utils.Log.Errorf("Failed to create vital: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create vital"})
 		return
@@ -94,12 +99,14 @@ func GetVitalsByPatientID(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	var vitals []models.Vital
-	if err := config.DB.WithContext(c).
-		Where("patient_id = ?", patientID).
-		Limit(limit).
-		Offset(offset).
-		Order("recorded_at DESC").
-		Find(&vitals).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "get_vitals", func(db *gorm.DB) error {
+		return db.WithContext(c).Where("patient_id = ?", patientID).
+			Limit(limit).
+			Offset(offset).
+			Order("recorded_at DESC").
+			Find(&vitals).Error
+	})
+	if err != nil {
 		utils.Log.Errorf("Failed to fetch vitals for patient %s: %v", patientID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch vitals"})
 		return
@@ -119,10 +126,13 @@ func GetVitalByID(c *gin.Context) {
 	}
 
 	var vital models.Vital
-	if err := config.DB.WithContext(c).
-		Preload("Patient").
-		Preload("MedicalRecord").
-		First(&vital, "id = ?", vitalID).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "get_vital", func(db *gorm.DB) error {
+		return db.WithContext(c).
+			Preload("Patient").
+			Preload("MedicalRecord").
+			First(&vital, "id = ?", vitalID).Error
+	})
+	if err != nil {
 		utils.Log.Warnf("Vital not found: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Vital not found"})
 		return
@@ -144,9 +154,12 @@ func GetVitalByID(c *gin.Context) {
 		}
 
 		var record models.MedicalRecord
-		if err := config.DB.WithContext(c).
-			Select("id").
-			First(&record, "id = ? AND doctor_id = ?", *vital.MedicalRecordID, user.ID).Error; err != nil {
+		err := metrics.DbMetrics(config.DB, "get_medical_record", func(db *gorm.DB) error {
+			return db.WithContext(c).
+				Select("id").
+				First(&record, "id = ? AND doctor_id = ?", *vital.MedicalRecordID, user.ID).Error
+		})
+		if err != nil {
 			utils.Log.Warnf("Doctor %s tried to access unassigned vital %s", user.ID, vital.ID)
 			c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this vital record"})
 			return
@@ -174,14 +187,17 @@ func UpdateVital(c *gin.Context) {
 		return
 	}
 
-	if err := config.DB.WithContext(c).
-		Model(&models.Vital{}).
-		Where("id = ?", vitalID).
-		Updates(map[string]interface{}{
-			"value":       input.Value,
-			"status":      input.Status,
-			"recorded_at": input.RecordedAt,
-		}).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "update_vital", func(db *gorm.DB) error {
+		return db.WithContext(c).
+			Model(&models.Vital{}).
+			Where("id = ?", vitalID).
+			Updates(map[string]interface{}{
+				"value":       input.Value,
+				"status":      input.Status,
+				"recorded_at": input.RecordedAt,
+			}).Error
+	})
+	if err != nil {
 		utils.Log.Errorf("Failed to update vital %s: %v", vitalID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vital"})
 		return
@@ -198,7 +214,10 @@ func DeleteVital(c *gin.Context) {
 		return
 	}
 
-	if err := config.DB.WithContext(c).Delete(&models.Vital{}, "id = ?", vitalID).Error; err != nil {
+	err := metrics.DbMetrics(config.DB, "delete_vital", func(db *gorm.DB) error {
+		return db.WithContext(c).Delete(&models.Vital{}, "id = ?", vitalID).Error
+	})
+	if err != nil {
 		utils.Log.Errorf("Failed to soft delete vital %s: %v", vitalID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete vital"})
 		return
