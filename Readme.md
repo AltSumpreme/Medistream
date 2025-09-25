@@ -1,7 +1,4 @@
 # Medistream   
-*A backend system for a modern Health Management System (HMS)*  
-
----
 
 ##  Overview  
 Medistream is a backend service for managing healthcare operations such as:  
@@ -32,7 +29,6 @@ Built with **Go + Gin + PostgreSQL + Redis**, Medistream is structured for scala
 ## Project Structure  
 
 ```bash
-.
 ├── cmd/                # Application entrypoint
 ├── config/             # Database & Redis configuration
 ├── controllers/        # Request handlers (appointments, auth, vitals, etc.)
