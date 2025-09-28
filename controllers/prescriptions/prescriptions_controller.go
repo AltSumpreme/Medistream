@@ -68,14 +68,23 @@ func GetPrescriptionsByPatientID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Patient ID is required"})
 		return
 	}
+	// Validate patient existence
+	var patient models.Patient
+	err := metrics.DbMetrics(config.DB, "get_patient_for_prescriptions", func(db *gorm.DB) error {
+		return db.WithContext(c).First(&patient, "id = ?", patientID).Error
+	})
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
+		return
+	}
 	switch models.Role(user.Role) {
 	case models.RolePatient:
-		if user.UserID.String() != patientID {
+		if patient.UserID != user.UserID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this patient's prescriptions"})
 			return
 		}
 	case models.RoleDoctor:
-		hasAccess, err := utils.DoctorHasAccessToPatient(user.UserID, uuid.MustParse(patientID), c)
+		hasAccess, err := utils.DoctorHasAccessToPatient(user.UserID, patient.ID, c)
 		if err != nil {
 			utils.Log.Errorf("Access check failed for doctor %s and patient %s: %v", user.ID, patientID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Access check failed"})
@@ -150,8 +159,6 @@ func GetPrescriptionByID(c *gin.Context) {
 	var prescription models.Prescription
 	err := metrics.DbMetrics(config.DB, "get_prescription_by_id", func(db *gorm.DB) error {
 		return db.WithContext(c).
-			Preload("Patient").
-			Preload("MedicalRecord").
 			First(&prescription, "id = ?", prescriptionID).Error
 	})
 	if err != nil {
@@ -159,10 +166,17 @@ func GetPrescriptionByID(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Prescription not found"})
 		return
 	}
+	var patient models.Patient
+	err = metrics.DbMetrics(config.DB, "get_patient_id_using_user", func(db *gorm.DB) error {
+		return db.WithContext(c).Preload("Patient").First(&patient, "id = ?", user.UserID).Error
+	})
+	if err != nil {
+		utils.Log.Errorf("Failed to fetch patients %s:%v", user.UserID, err)
+	}
 
 	switch models.Role(user.Role) {
 	case models.RolePatient:
-		if prescription.PatientID != user.UserID {
+		if prescription.PatientID != patient.ID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this prescription"})
 			return
 		}

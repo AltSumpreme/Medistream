@@ -12,6 +12,7 @@ func RegisterMedicalRecordsRoutes(rg *gin.RouterGroup, medicalrecordCache *cache
 
 	{
 		rg.POST("/", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.CreateMedicalRecord)
+		rg.GET("/patient/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), medicalrecords.GetRecordsByPatientID)
 		rg.GET("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), medicalrecords.GetMedicalRecordByID)
 		rg.PUT("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), func(c *gin.Context) {
 			medicalrecords.UpdateMedicalRecord(c, medicalrecordCache)

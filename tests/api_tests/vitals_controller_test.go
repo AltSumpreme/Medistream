@@ -31,8 +31,8 @@ func setupVitalsRouterWithClaims(claims *utils.JWTClaims) *gin.Engine {
 func TestVitalRoutes(t *testing.T) {
 	db := config.DB
 
-	// Seed users
-	userPatient, _, userDoctor, _, _ := factories.CreateEntries(db)
+	// Seed entries (both users + patient/doctor entities)
+	userPatient, patient, userDoctor, _, _ := factories.CreateEntries(db)
 
 	// JWT Claims
 	claimsDoctor := factories.MakeJWT(userDoctor.ID, models.RoleDoctor)
@@ -47,7 +47,7 @@ func TestVitalRoutes(t *testing.T) {
 
 	t.Run("Create Vital", func(t *testing.T) {
 		body := map[string]interface{}{
-			"patient_id":  userPatient.ID,
+			"patient_id":  patient.ID,
 			"type":        "HEART_RATE",
 			"value":       "85",
 			"status":      "normal",
@@ -59,7 +59,7 @@ func TestVitalRoutes(t *testing.T) {
 	})
 
 	t.Run("Get Vital by ID", func(t *testing.T) {
-		vital := factories.SeedVital(db, userPatient.ID)
+		vital := factories.SeedVital(db, patient.ID)
 
 		res := clientDoctor.Get("/vitals/"+vital.ID.String(), nil)
 		assert.Equal(t, http.StatusOK, res.Code)
@@ -67,15 +67,15 @@ func TestVitalRoutes(t *testing.T) {
 	})
 
 	t.Run("Get Vitals by Patient ID", func(t *testing.T) {
-		factories.SeedVital(db, userPatient.ID)
+		factories.SeedVital(db, patient.ID)
 
-		res := clientPatient.Get("/vitals/patient/"+userPatient.ID.String(), nil)
+		res := clientPatient.Get("/vitals/patient/"+patient.ID.String(), nil)
 		assert.Equal(t, http.StatusOK, res.Code)
 		assert.Contains(t, res.Body.String(), "HEART_RATE")
 	})
 
 	t.Run("Update Vital", func(t *testing.T) {
-		vital := factories.SeedVital(db, userPatient.ID)
+		vital := factories.SeedVital(db, patient.ID)
 
 		updateBody := map[string]interface{}{
 			"value":       "95",
@@ -88,7 +88,7 @@ func TestVitalRoutes(t *testing.T) {
 	})
 
 	t.Run("Delete Vital", func(t *testing.T) {
-		vital := factories.SeedVital(db, userPatient.ID)
+		vital := factories.SeedVital(db, patient.ID)
 
 		res := clientDoctor.Delete("/vitals/"+vital.ID.String(), nil)
 		assert.Equal(t, http.StatusOK, res.Code)
