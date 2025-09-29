@@ -3,6 +3,7 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
@@ -10,15 +11,22 @@ import (
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		cookie, err := c.Cookie("access_token")
-		if err != nil || cookie == "" {
-			log.Println("Authorization cookie missing or malformed")
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing or malformed token"})
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			log.Println("Authorization header missing")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
 			return
 		}
-		tokenStr := cookie
-
-		claims, err := utils.ValidateJWT(tokenStr)
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid authorization header format. Use: Bearer <token>",
+			})
+			c.Abort()
+			return
+		}
+		tokenString := tokenParts[1]
+		claims, err := utils.ValidateJWT(tokenString)
 		if err != nil {
 			log.Printf("Invalid JWT: %v", err)
 

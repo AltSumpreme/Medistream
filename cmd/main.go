@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"os"
+	"strings"
 
 	"time"
 
@@ -28,6 +30,8 @@ func main() {
 	// Initialize the database connection
 	config.ConnectDB()
 
+	defer config.CloseDB()
+
 	// Initialize Redis
 	config.InitRedis()
 
@@ -38,8 +42,13 @@ func main() {
 
 	router := gin.Default()
 
+	origins := os.Getenv("CORS_ALLOW_ORIGINS")
+	if origins == "" {
+		origins = "*"
+	}
+
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowOrigins:     strings.Split(origins, ","),
 		AllowCredentials: true,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},

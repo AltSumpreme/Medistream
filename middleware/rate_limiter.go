@@ -25,7 +25,7 @@ func RateLimiterMiddleware() gin.HandlerFunc {
 		}
 		if !allowed {
 			utils.Log.Warnf("RateLimiter: Too many requests from IP %s", ip)
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests"})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
 			c.Abort()
 			return
 		}
@@ -47,7 +47,7 @@ func StrictRateLimiterMiddleware() gin.HandlerFunc {
 		}
 		if !allowed {
 			utils.Log.Warnf("RateLimiter: Too many requests from IP %s", ip)
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests"})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests,please try again later"})
 			c.Abort()
 			return
 		}

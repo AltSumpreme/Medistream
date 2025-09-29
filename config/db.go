@@ -67,7 +67,19 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatalf("failed to initialize GORM: %v", err)
 	}
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(2)
+	DB = gormDB
+	log.Println("DB initialized successfully")
+}
 
-	DB = gormDB // <- Now factories can safely use this
-	log.Println("GORM DB initialized successfully")
+func CloseDB() {
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Fatalf("failed to get sql.DB from GORM: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		log.Fatalf("failed to close database connection: %v", err)
+	}
+	log.Println("Database connection closed successfully")
 }
