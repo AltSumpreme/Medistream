@@ -23,9 +23,6 @@ WORKDIR /app
 COPY --from=builder /app/medistream .
 
 
-# Copy the .env file from builder stage
-COPY --from=builder /app/.env .env
-
 # Copy the migrations folder
 COPY --from=builder /app/migrations ./migrations
 

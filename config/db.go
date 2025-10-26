@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose"
@@ -17,14 +18,13 @@ var DB *gorm.DB
 
 func ConnectDB() {
 	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=%s&channel_binding=%s",
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		os.Getenv("DB_USER"),
 		os.Getenv("DB_PASSWORD"),
 		os.Getenv("DB_HOST"),
 		os.Getenv("DB_PORT"),
 		os.Getenv("DB_NAME"),
 		os.Getenv("DB_SSLMODE"),
-		os.Getenv("DB_CHANNEL_BINDING"),
 	)
 	if dsn == "" {
 		log.Fatal("DATABASE_URL is not set")
@@ -67,8 +67,10 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatalf("failed to initialize GORM: %v", err)
 	}
-	sqlDB.SetMaxOpenConns(10)
-	sqlDB.SetMaxIdleConns(2)
+	sqlDB.SetMaxOpenConns(60)
+	sqlDB.SetMaxIdleConns(15)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 	DB = gormDB
 	log.Println("DB initialized successfully")
 }

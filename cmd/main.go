@@ -14,15 +14,15 @@ import (
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
-
-	if err := godotenv.Load(".env"); err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
+	/*
+		if err := godotenv.Load(".env"); err != nil {
+			log.Fatalf("Error loading .env file: %v", err)
+		}
+	*/
 	// Initialize the logger
 	utils.InitLogger()
 	// Initialize metrics

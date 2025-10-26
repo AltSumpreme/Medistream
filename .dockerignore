@@ -1,0 +1,39 @@
+# Logs
+logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist
+build
+.next
+out
+
+# Tests and config
+*.test.*
+*.spec.*
+coverage
+.vscode
+.idea
+*.iml
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+
+# Git
+.git
+.gitignore
+
+# Misc
+*.swp
+*.bak
+*.tmp

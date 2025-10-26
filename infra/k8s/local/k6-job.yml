@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-test
+spec:
+  parallelism: 5
+  completions: 1
+  template:
+    spec:
+      containers:
+        - name: k6
+          image: grafana/k6
+          command: ["k6", "run", "/scripts/test.js"]
+          env:
+            - name: BASE_URL
+              value: "http://<minikube_ip>:30080"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+          volumeMounts:
+            - name: k6-script
+              mountPath: /scripts
+      restartPolicy: Never
+      volumes:
+        - name: k6-script
+          configMap:
+            name: k6-script

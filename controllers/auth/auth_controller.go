@@ -32,7 +32,9 @@ func SignUp(c *gin.Context) {
 
 	var existingAuth models.Auth
 
-	err := metrics.DbMetrics(config.DB, "Signup", func(db *gorm.DB) error { return db.Where("email = ?", input.Email).First(&existingAuth).Error })
+	err := metrics.DbMetrics(config.DB, "Signup", func(db *gorm.DB) error {
+		return db.WithContext(c.Request.Context()).Where("email = ?", input.Email).First(&existingAuth).Error
+	})
 	if err == nil {
 		utils.Log.Warnf("SignUp: Email already exists - %s", input.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Email already exists"})
@@ -54,7 +56,7 @@ func SignUp(c *gin.Context) {
 	}
 
 	err = metrics.DbMetrics(config.DB, "Signup", func(db *gorm.DB) error {
-		return db.Create(&auth).Error
+		return db.WithContext(c.Request.Context()).Create(&auth).Error
 	})
 	if err != nil {
 		utils.Log.Errorf("Signup: Failed to create user %v", err)
@@ -70,7 +72,7 @@ func SignUp(c *gin.Context) {
 		Phone:     input.Phone,
 	}
 	err = metrics.DbMetrics(config.DB, "Signup", func(db *gorm.DB) error {
-		return db.Create(&user).Error
+		return db.WithContext(c.Request.Context()).Create(&user).Error
 	})
 	if err != nil {
 		utils.Log.Errorf("SignUp: Failed to create user profile - %v", err)
@@ -82,7 +84,7 @@ func SignUp(c *gin.Context) {
 		UserID: user.ID,
 	}
 	if err := metrics.DbMetrics(config.DB, "Signup", func(db *gorm.DB) error {
-		return db.Create(&patient).Error
+		return db.WithContext(c.Request.Context()).Create(&patient).Error
 	}); err != nil {
 		utils.Log.Errorf("SignUp: Failed to create patient profile - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create patient profile"})
@@ -105,7 +107,7 @@ func Login(c *gin.Context) {
 	}
 	var auth models.Auth
 	err := metrics.DbMetrics(config.DB, "Login", func(db *gorm.DB) error {
-		return db.Where("email = ?", input.Email).First(&auth).Error
+		return db.WithContext(c.Request.Context()).Where("email = ?", input.Email).First(&auth).Error
 	})
 	if err != nil {
 		utils.Log.Errorf("Login:Invalid email or password- %v", err)
@@ -121,7 +123,7 @@ func Login(c *gin.Context) {
 
 	var user models.User
 	if err := metrics.DbMetrics(config.DB, "Login", func(db *gorm.DB) error {
-		return db.Where("auth_id = ?", auth.ID).First(&user).Error
+		return db.WithContext(c.Request.Context()).Where("auth_id = ?", auth.ID).First(&user).Error
 	}); err != nil {
 		utils.Log.Errorf("Login:Failed to find user profile - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find user profile"})
@@ -148,7 +150,7 @@ func Login(c *gin.Context) {
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 	}
 	err = metrics.DbMetrics(config.DB, "Login", func(db *gorm.DB) error {
-		return db.Create(&rt).Error
+		return db.WithContext(c.Request.Context()).Create(&rt).Error
 	})
 	if err != nil {
 		utils.Log.Errorf("Login: Failed to create refresh token - %v", err)
@@ -201,7 +203,7 @@ func RefreshAccessToken(c *gin.Context) {
 
 	var stored models.RefreshToken
 	err := metrics.DbMetrics(config.DB, "RefreshAccessToken", func(db *gorm.DB) error {
-		return db.Preload("User").Where("token = ? AND revoked = false", input.RefreshToken).First(&stored).Error
+		return db.WithContext(c.Request.Context()).Preload("User").Where("token = ? AND revoked = false", input.RefreshToken).First(&stored).Error
 	})
 	if err != nil {
 		utils.Log.Errorf("RefreshAccessToken:Invalid or expired refresh token - %v", err)
@@ -238,7 +240,7 @@ func Logout(c *gin.Context) {
 		return
 	}
 	err = metrics.DbMetrics(config.DB, "Logout", func(db *gorm.DB) error {
-		return db.Model(&models.RefreshToken{}).Where("user_id=? AND revoked = false", claims.UserID).Update("revoked", true).Error
+		return db.WithContext(c.Request.Context()).Model(&models.RefreshToken{}).Where("user_id=? AND revoked = false", claims.UserID).Update("revoked", true).Error
 	})
 	if err != nil {
 		utils.Log.Errorf("Logout: Failed to revoke refresh token - %v", err)
