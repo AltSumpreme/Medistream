@@ -2,6 +2,7 @@ package config
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
@@ -15,13 +16,32 @@ import (
 var DB *gorm.DB
 
 func ConnectDB() {
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s&channel_binding=%s",
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		os.Getenv("DB_NAME"),
+		os.Getenv("DB_SSLMODE"),
+		os.Getenv("DB_CHANNEL_BINDING"),
+	)
 	if dsn == "" {
 		log.Fatal("DATABASE_URL is not set")
 	}
 
 	// Open sql.DB for Goose
 	sqlDB, err := sql.Open("postgres", dsn)
+	if err != nil {
+		log.Fatalf("failed to open sql.DB: %v", err)
+	}
+	if err := sqlDB.Ping(); err != nil {
+		log.Fatalf("failed to ping database: %v", err)
+	}
+	log.Println("Database connection established (sql.DB)")
+
+	// Open sql.DB for Goose
+	sqlDB, err = sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("failed to open sql.DB: %v", err)
 	}
@@ -47,7 +67,19 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatalf("failed to initialize GORM: %v", err)
 	}
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(2)
+	DB = gormDB
+	log.Println("DB initialized successfully")
+}
 
-	DB = gormDB // <- Now factories can safely use this
-	log.Println("GORM DB initialized successfully")
+func CloseDB() {
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Fatalf("failed to get sql.DB from GORM: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		log.Fatalf("failed to close database connection: %v", err)
+	}
+	log.Println("Database connection closed successfully")
 }

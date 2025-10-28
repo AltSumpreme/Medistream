@@ -13,7 +13,7 @@ var (
 	)
 	DBLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "db_query_latency_seconds",
+			Name:    "db_query_latency_total",
 			Help:    "Latency of database queries in seconds",
 			Buckets: prometheus.DefBuckets,
 		},
@@ -22,7 +22,7 @@ var (
 
 	CacheHits = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "cache_hits_seconds",
+			Name: "cache_hits_total",
 			Help: "Total number of cache hits.",
 		},
 		[]string{"cache_key"},

@@ -155,8 +155,6 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create refresh token"})
 		return
 	}
-
-	c.SetCookie("access_token", accessToken, 7200, "/", "", false, true)
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "User logged in successfully",
 		"access_token": accessToken,

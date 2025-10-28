@@ -10,8 +10,8 @@ import (
 
 func RegisterPrescriptionRoutes(rg *gin.RouterGroup, prescriptionCache *cache.Cache) {
 	rg.POST("/", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), prescriptions.CreatePrescription)
-	rg.GET("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), prescriptions.GetPrescriptionByID)
 	rg.GET("/patient/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), prescriptions.GetPrescriptionsByPatientID)
+	rg.GET("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor, models.RolePatient), prescriptions.GetPrescriptionByID)
 	rg.PUT("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), func(c *gin.Context) { prescriptions.UpdatePrescription(c, prescriptionCache) })
 	rg.DELETE("/:id", utils.RoleChecker(models.RoleAdmin, models.RoleDoctor), func(c *gin.Context) { prescriptions.DeletePrescription(c, prescriptionCache) })
 }

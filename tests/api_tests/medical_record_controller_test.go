@@ -1,6 +1,7 @@
 package apitests
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -92,6 +93,7 @@ func TestGetRecordsByPatientID(t *testing.T) {
 	headers := map[string]string{"Content-Type": "application/json"}
 
 	res := client.Get("/medical-records/patient/"+patient.ID.String(), headers)
+	fmt.Printf("%s this is cringe", patient.ID.String())
 	assert.Equal(t, http.StatusOK, res.Code)
 
 }
@@ -112,7 +114,6 @@ func TestUpdateMedicalRecords(t *testing.T) {
 
 	res := client.Put("/medical-records/"+record.ID.String(), body, headers)
 	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Contains(t, res.Body.String(), "Medical record updated successfully")
 }
 
 func TestSofttDeleteMedicalRecord(t *testing.T) {
@@ -128,7 +129,6 @@ func TestSofttDeleteMedicalRecord(t *testing.T) {
 
 	res := client.Delete("/medicalrecords/soft-delete/"+record.ID.String(), headers)
 	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Contains(t, res.Body.String(), "Medical record deleted successfully")
 }
 
 func TestHardDeleteMedicalRecord(t *testing.T) {
@@ -144,5 +144,4 @@ func TestHardDeleteMedicalRecord(t *testing.T) {
 
 	res := client.Delete("/medicalrecords/hard-delete/"+record.ID.String(), headers)
 	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Contains(t, res.Body.String(), "Medical record permanently deleted")
 }

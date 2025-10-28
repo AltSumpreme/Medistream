@@ -30,8 +30,7 @@ func setupReportRouterWithClaims(claims *utils.JWTClaims) *gin.Engine {
 func TestReportRoutes(t *testing.T) {
 	db := config.DB
 
-	// Seed users
-	userPatient, _, userDoctor, _, _ := factories.CreateEntries(db)
+	userPatient, patient, userDoctor, doctor, _ := factories.CreateEntries(db)
 
 	// JWT Claims
 	claimsDoctor := factories.MakeJWT(userDoctor.ID, models.RoleDoctor)
@@ -45,14 +44,14 @@ func TestReportRoutes(t *testing.T) {
 	clientPatient := apiclient.NewTestClient(routerPatient)
 
 	t.Run("Create Report", func(t *testing.T) {
-		record := factories.CreateMedicalRecord(db, userPatient.ID, userDoctor.ID)
+		record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
 
 		body := map[string]interface{}{
 			"title":             "Blood Test",
 			"description":       "Routine blood test",
 			"file_url":          "http://example.com/report.pdf",
-			"patient_id":        userPatient.ID,
-			"doctor_id":         userDoctor.ID,
+			"patient_id":        patient.ID,
+			"doctor_id":         doctor.ID,
 			"medical_record_id": record.ID,
 		}
 
@@ -62,17 +61,17 @@ func TestReportRoutes(t *testing.T) {
 	})
 
 	t.Run("Get Report by Patient ID", func(t *testing.T) {
-		record := factories.CreateMedicalRecord(db, userPatient.ID, userDoctor.ID)
-		factories.SeedReport(db, userPatient.ID, userDoctor.ID, &record.ID)
+		record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
+		factories.SeedReport(db, patient.ID, doctor.ID, &record.ID)
 
-		res := clientPatient.Get("/reports/patient/"+userPatient.ID.String(), nil)
+		res := clientPatient.Get("/reports/patient/"+patient.ID.String(), nil)
 		assert.Equal(t, http.StatusOK, res.Code)
 		assert.Contains(t, res.Body.String(), "Blood Test")
 	})
 
 	t.Run("Get Report by ID", func(t *testing.T) {
-		record := factories.CreateMedicalRecord(db, userPatient.ID, userDoctor.ID)
-		report := factories.SeedReport(db, userPatient.ID, userDoctor.ID, &record.ID)
+		record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
+		report := factories.SeedReport(db, patient.ID, doctor.ID, &record.ID)
 
 		res := clientDoctor.Get("/reports/"+report.ID.String(), nil)
 		assert.Equal(t, http.StatusOK, res.Code)
@@ -80,15 +79,15 @@ func TestReportRoutes(t *testing.T) {
 	})
 
 	t.Run("Update Report", func(t *testing.T) {
-		record := factories.CreateMedicalRecord(db, userPatient.ID, userDoctor.ID)
-		report := factories.SeedReport(db, userPatient.ID, userDoctor.ID, &record.ID)
+		record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
+		report := factories.SeedReport(db, patient.ID, doctor.ID, &record.ID)
 
 		updateBody := map[string]interface{}{
 			"title":             "Updated Blood Test",
 			"description":       "Updated description",
 			"file_url":          "http://example.com/updated.pdf",
-			"patient_id":        userPatient.ID,
-			"doctor_id":         userDoctor.ID,
+			"patient_id":        patient.ID,
+			"doctor_id":         doctor.ID,
 			"medical_record_id": record.ID,
 		}
 
@@ -96,9 +95,10 @@ func TestReportRoutes(t *testing.T) {
 		assert.Equal(t, http.StatusOK, res.Code)
 		assert.Contains(t, res.Body.String(), "Report updated successfully")
 	})
+
 	t.Run("Delete Report", func(t *testing.T) {
-		record := factories.CreateMedicalRecord(db, userPatient.ID, userDoctor.ID)
-		report := factories.SeedReport(db, userPatient.ID, userDoctor.ID, &record.ID)
+		record := factories.CreateMedicalRecord(db, patient.ID, doctor.ID)
+		report := factories.SeedReport(db, patient.ID, doctor.ID, &record.ID)
 
 		res := clientDoctor.Delete("/reports/"+report.ID.String(), nil)
 		assert.Equal(t, http.StatusOK, res.Code)

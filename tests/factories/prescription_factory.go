@@ -25,6 +25,9 @@ func SeedPrescription(db *gorm.DB, medicalRecordID *uuid.UUID, doctorID, patient
 		Instructions:    "After food",
 		IssuedAt:        time.Now(),
 	}
+	if err := db.Save(&prescription).Error; err != nil {
+		log.Fatalf("Prescription not created")
+	}
 
 	return prescription
 
