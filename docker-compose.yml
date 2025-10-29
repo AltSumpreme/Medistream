@@ -1,6 +1,9 @@
+version: "3.9"
+
 services:
   backend:
     build: .
+    image: medistream-backend:v4
     container_name: medistream-backend
     ports:
       - "8080:8080"
@@ -10,25 +13,39 @@ services:
       - .env
     volumes:
       - ./migrations:/app/migrations
-  #  depends_on:
-  #    - redis
-  #    - db
-  # Uncomment the following services if you want to run Postgres and Redis locally
- # db:
- #  image: postgres:15
- #   container_name: medistream-db
- #   env_file:
- #     - .env
- #   ports:
- #     - "5432:5432"
- #   volumes:
- #     - db_data:/var/lib/postgresql/data
+    depends_on:
+      - redis
+      - db
 
- # redis:
- #   image: redis:7-alpine
- #   container_name: medistream-redis
- #   ports:
- #     - "6379:6379"
+  db:
+    image: postgres:15
+    container_name: medistream-db
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - medistream-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: medistream-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - medistream-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   prometheus:
     image: prom/prometheus:latest
@@ -58,6 +75,9 @@ services:
       - medistream-network
     depends_on:
       - prometheus
+
+volumes:
+  db_data:
 
 networks:
   medistream-network:
