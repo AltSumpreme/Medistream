@@ -8,5 +8,5 @@ import (
 
 func StartAllWorkers(ctx context.Context, queue *queue.RedisQueueConfig) {
 
-	go NewJobConsumer(queue, "appointment_jobs", HandleAppointmentJobs).Start(ctx)
+	go NewJobConsumer(queue, "appointment_queue", HandleAppointmentJobs).Start(ctx)
 }

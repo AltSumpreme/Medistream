@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/AltSumpreme/Medistream.git/config"
+	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/queue"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/AltSumpreme/Medistream.git/workers"
@@ -19,6 +20,14 @@ func main() {
 	// Initialize Redis
 	config.InitRedis()
 	utils.Log.Info("Worker started")
+
+	// Initialize metrics
+	metrics.MetricsInit()
+
+	// Initialize the database connection
+	config.ConnectDB()
+	defer config.CloseDB()
+	// Initialize Job Queue
 
 	q, err := queue.InitQueue()
 	if err != nil {
