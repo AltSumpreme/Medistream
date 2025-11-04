@@ -1,5 +1,4 @@
 version: "3.9"
-
 services:
   backend:
     build: .
@@ -16,7 +15,20 @@ services:
     depends_on:
       - redis
       - db
-
+      
+  worker:
+    image: medistream-backend:v4
+    container_name: medistream-worker
+    command: ["./worker"]
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - db
+    networks:
+      - medistream-network
+    restart: on-failure
+    
   db:
     image: postgres:15
     container_name: medistream-db
@@ -33,7 +45,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
+      
   redis:
     image: redis:7-alpine
     container_name: medistream-redis
@@ -46,7 +58,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
+      
   prometheus:
     image: prom/prometheus:latest
     container_name: medistream-prometheus
@@ -60,7 +72,7 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - medistream-network
-
+      
   grafana:
     image: grafana/grafana:10.1.1
     container_name: medistream-grafana

@@ -9,6 +9,7 @@ import (
 
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/metrics"
+	"github.com/AltSumpreme/Medistream.git/queue"
 	"github.com/AltSumpreme/Medistream.git/routes"
 	"github.com/AltSumpreme/Medistream.git/services/cache"
 	"github.com/AltSumpreme/Medistream.git/utils"
@@ -34,6 +35,13 @@ func main() {
 
 	// Initialize Redis
 	config.InitRedis()
+
+	//Initialize Job Queue
+	jobQueue, err := queue.InitQueue()
+	if err != nil {
+		utils.Log.Fatalf("Failed to initialize job queue: %v", err)
+	}
+	defer jobQueue.Close()
 
 	// Set Gin to release mode in production
 	if gin.Mode() != gin.DebugMode {
@@ -62,7 +70,7 @@ func main() {
 	reportsCache := cache.NewCache(config.Rdb, config.Ctx)
 	vitalsCache := cache.NewCache(config.Rdb, config.Ctx)
 
-	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache, vitalsCache)
+	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache, vitalsCache, jobQueue)
 
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	log.Println("Starting server on :8080")

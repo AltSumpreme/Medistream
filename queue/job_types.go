@@ -3,8 +3,7 @@ package queue
 type JobType string
 
 const (
-	JobUserSignUp JobType = "user_sign_up"
-	JobUserLogin  JobType = "user_login"
+	JobTypeCreateAppointment JobType = "create_appointment"
 )
 
 type JobPayload struct {

@@ -3,8 +3,10 @@ package workers
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/AltSumpreme/Medistream.git/queue"
+	"github.com/redis/go-redis/v9"
 )
 
 type JobConsumer struct {
@@ -22,20 +24,38 @@ func NewJobConsumer(q *queue.RedisQueueConfig, queueName string, handler func(*q
 }
 
 func (c *JobConsumer) Start(ctx context.Context) {
-	log.Printf("Worker started for queue %s", c.queueName)
+	log.Printf("[Worker] Started consumer for queue: %s", c.queueName)
+
 	for {
-		job, err := c.queue.Dequeue(ctx, c.queueName)
-		if err != nil {
-			log.Printf("[%s] Dequeue error %v", c.queueName, err)
-			continue
-		}
-		if job == nil {
-			continue
+		select {
+		case <-ctx.Done():
+			log.Printf("[Worker] Stopping consumer for %s: context cancelled", c.queueName)
+			return
 
-		}
-		if err := c.handler(job); err != nil {
-			log.Printf("[%s]job failed: %v", c.queueName, err)
-		}
+		default:
+			job, err := c.queue.Dequeue(ctx, c.queueName)
+			if err != nil {
+				// Ignore "no job" responses
+				if err == redis.Nil {
+					time.Sleep(200 * time.Millisecond)
+					continue
+				}
+				log.Printf("[%s] Dequeue error: %v", c.queueName, err)
+				time.Sleep(2 * time.Second) // Backoff on error
+				continue
+			}
 
+			if job == nil {
+				time.Sleep(200 * time.Millisecond)
+				continue
+			}
+
+			start := time.Now()
+			if err := c.handler(job); err != nil {
+				log.Printf("[%s] Job failed: %v", c.queueName, err)
+			} else {
+				log.Printf("[%s] Job processed successfully in %v", c.queueName, time.Since(start))
+			}
+		}
 	}
 }
