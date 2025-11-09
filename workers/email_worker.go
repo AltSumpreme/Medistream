@@ -13,6 +13,7 @@ import (
 func RegisterEmailHandlers(mux *asynq.ServeMux) {
 	mux.HandleFunc(string(queue.JobTypeWelcomeEmail), handleWelcomeEmail)
 	mux.HandleFunc(string(queue.JobOTPEmail), handleOTPEmail)
+	mux.HandleFunc(string(queue.JobTypeResetPassword), handleresetPasswordEmail)
 
 }
 
@@ -42,7 +43,7 @@ func handleOTPEmail(ctx context.Context, task *asynq.Task) error {
 	)
 }
 
-func handleresetPasswordEmail(body string, ctx context.Context, task *asynq.Task) error {
+func handleresetPasswordEmail(ctx context.Context, task *asynq.Task) error {
 
 	var p queue.OTPPayload
 	if err := json.Unmarshal(task.Payload(), &p); err != nil {
@@ -51,7 +52,7 @@ func handleresetPasswordEmail(body string, ctx context.Context, task *asynq.Task
 	return mail.SendEmail(
 		p.Email,
 		"Reset Your Password",
-		body,
+		"Your password has been reset successfully.",
 	)
 
 }
