@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
-	"github.com/AltSumpreme/Medistream.git/handlers/appointments"
+	"github.com/AltSumpreme/Medistream.git/handlers"
 	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/services/cache"
@@ -31,7 +31,7 @@ type AppointmentUpdateInput struct {
 }
 
 func CreateAppointment(data any) {
-	var input appointments.AppointmentInput
+	var input handlers.AppointmentInput
 
 	var patient models.Patient
 	err := metrics.DbMetrics(config.DB, "select_patient", func(db *gorm.DB) error {

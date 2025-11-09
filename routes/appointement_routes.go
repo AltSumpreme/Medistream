@@ -1,17 +1,17 @@
 package routes
 
 import (
-	"github.com/AltSumpreme/Medistream.git/handlers/appointments"
+	"github.com/AltSumpreme/Medistream.git/handlers"
 	"github.com/AltSumpreme/Medistream.git/models"
-	"github.com/AltSumpreme/Medistream.git/queue"
 	"github.com/AltSumpreme/Medistream.git/services/cache"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 )
 
-func RegisterAppointmentRoutes(rg *gin.RouterGroup, appointmentCache *cache.Cache, jobQueue *queue.RedisQueueConfig) {
+func RegisterAppointmentRoutes(rg *gin.RouterGroup, appointmentCache *cache.Cache, queue *asynq.Client) {
 
-	rg.POST("", utils.RoleChecker(models.RolePatient), func(c *gin.Context) { appointments.HandleUserCreateAppointment(c, jobQueue) })
+	rg.POST("", utils.RoleChecker(models.RolePatient), func(c *gin.Context) { handlers.HandleUserCreateAppointment(c, queue) })
 	{ /*
 			rg.GET("", utils.RoleChecker(models.RoleAdmin), appointments.GetAllAppointments)
 			rg.GET(":id", utils.RoleChecker(models.RoleAdmin, models.RolePatient, models.RoleDoctor), appointments.GetAppointmentByID)

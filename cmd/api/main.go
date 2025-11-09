@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/AltSumpreme/Medistream.git/queue"
 	"github.com/AltSumpreme/Medistream.git/routes"
 	"github.com/AltSumpreme/Medistream.git/services/cache"
+	"github.com/AltSumpreme/Medistream.git/services/mail"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -37,11 +39,22 @@ func main() {
 	config.InitRedis()
 
 	//Initialize Job Queue
-	jobQueue, err := queue.InitQueue()
+	config.InitAsynqQueue()
+	jobQueue := queue.Init()
+	defer queue.Close()
+
+	// Initialize SMTP Mailer
+	port, err := strconv.Atoi(os.Getenv("SMTP_PORT"))
 	if err != nil {
-		utils.Log.Fatalf("Failed to initialize job queue: %v", err)
+		log.Fatalf("Invalid SMTP_PORT: %v", err)
 	}
-	defer jobQueue.Close()
+	mail.InitMailer(mail.MailerConfig{
+		Host:     os.Getenv("SMTP_HOST"),
+		Port:     port,
+		Username: os.Getenv("SMTP_USERNAME"),
+		Password: os.Getenv("SMTP_PASSWORD"),
+		From:     os.Getenv("SMTP_FROM"),
+	})
 
 	// Set Gin to release mode in production
 	if gin.Mode() != gin.DebugMode {

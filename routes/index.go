@@ -2,12 +2,12 @@ package routes
 
 import (
 	"github.com/AltSumpreme/Medistream.git/middleware"
-	"github.com/AltSumpreme/Medistream.git/queue"
 	"github.com/AltSumpreme/Medistream.git/services/cache"
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 )
 
-func RegisterRoutes(r *gin.Engine, appointmentCache *cache.Cache, medicalrecordsCache *cache.Cache, prescriptionsCache *cache.Cache, reportsCache *cache.Cache, vitalsCache *cache.Cache, jobQueue *queue.RedisQueueConfig) {
+func RegisterRoutes(r *gin.Engine, appointmentCache *cache.Cache, medicalrecordsCache *cache.Cache, prescriptionsCache *cache.Cache, reportsCache *cache.Cache, vitalsCache *cache.Cache, jobQueue *asynq.Client) {
 
 	auth := r.Group("/auth")
 	// auth.Use(middleware.StrictRateLimiterMiddleware())

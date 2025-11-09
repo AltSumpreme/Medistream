@@ -3,7 +3,9 @@ package cache
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -86,4 +88,25 @@ func (c *Cache) VitalsInvalidate(patientID string) {
 			c.Rdb.Del(c.Ctx, iter.Val())
 		}
 	}
+}
+
+func SaveOTP(email, otp string, ttl time.Duration) error {
+	return config.Rdb.Set(config.Ctx, fmt.Sprintf("otp:%s", email), otp, ttl).Err()
+}
+
+func VerifyOTP(email, otp string) error {
+	key := fmt.Sprintf("otp:%s", email)
+
+	storedOTP, err := config.Rdb.Get(config.Ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("OTP not found or expired")
+	}
+
+	if storedOTP != otp {
+		return fmt.Errorf("invalid otp")
+	}
+
+	config.Rdb.Del(config.Ctx, key)
+
+	return nil
 }

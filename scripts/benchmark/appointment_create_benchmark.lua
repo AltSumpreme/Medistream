@@ -14,7 +14,7 @@ local JWT_TOKEN = os.getenv("JWT_TOKEN")
 
 if not JWT_TOKEN or JWT_TOKEN == "" then
   io.stderr:write(" ERROR: JWT_TOKEN not found in environment. Did you export it?\n")
-  os.exit(1)
+  os.exit(1)  
 end
 
 -- === UUID generator ===

@@ -1,4 +1,4 @@
-package appointments
+package handlers
 
 import (
 	"net/http"
@@ -8,6 +8,7 @@ import (
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 )
 
 type AppointmentInput struct {
@@ -20,18 +21,8 @@ type AppointmentInput struct {
 	Notes           string    `json:"notes"`
 	DoctorID        uuid.UUID `json:"doctorId" binding:"required"`
 }
-type AppointmentStatusInput struct {
-	Status string `json:"status" binding:"required,oneof=SCHEDULED CONFIRMED CANCELLED COMPLETED"`
-}
-type AppointmentUpdateInput struct {
-	StartTime string `json:"appointment_time" binding:"omitempty"`
-	EndTime   string `json:"end_time" binding:"omitempty"`
-	Mode      string `json:"mode" binding:"omitempty,oneof=Online In-Person"`
-	Location  string `json:"location" binding:"omitempty"`
-	Notes     string `json:"notes" binding:"omitempty"`
-}
 
-func HandleUserCreateAppointment(c *gin.Context, q *queue.RedisQueueConfig) {
+func HandleUserCreateAppointment(c *gin.Context, client *asynq.Client) {
 	_, err := utils.GetCurrentUser(c)
 	if err != nil {
 		utils.Log.Warnf("CreateAppointment: Failed to get current user - %v", err)
@@ -45,11 +36,14 @@ func HandleUserCreateAppointment(c *gin.Context, q *queue.RedisQueueConfig) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input", "details": err.Error()})
 		return
 	}
-	job := queue.JobPayload{
-		Type: queue.JobTypeCreateAppointment,
-		Data: input,
+	task, err := queue.NewTask(queue.JobTypeCreateAppointment, input)
+	if err != nil {
+		utils.Log.Errorf("CreateAppointment: Failed to create task - %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process appointment"})
+		return
 	}
-	if err := q.Enqueue(c.Request.Context(), "appointment_queue", job); err != nil {
+	_, err = client.Enqueue(task, asynq.Queue("appoinment"), asynq.MaxRetry(5))
+	if err != nil {
 		utils.Log.Errorf("SignUp: Failed to enqueue job - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process signup"})
 		return
