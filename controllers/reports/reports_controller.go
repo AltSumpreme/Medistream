@@ -19,9 +19,9 @@ import (
 )
 
 type ReportInput struct {
-	Title           string    `json:"title" binding:"required"`
-	Description     string    `json:"description" binding:"required"`
-	FileURL         string    `json:"file_url" binding:"required"`
+	Title       string `json:"title" binding:"required"`
+	Description string `json:"description" binding:"required"`
+	//FileURL         string    `json:"file_url" binding:"required"`
 	PatientID       uuid.UUID `json:"patient_id" binding:"required"`
 	DoctorID        uuid.UUID `json:"doctor_id" binding:"required"`
 	MedicalRecordID uuid.UUID `json:"medical_record_id" binding:"required"`
@@ -45,9 +45,9 @@ func CreateReport(c *gin.Context) {
 	}
 
 	report := models.Report{
-		Title:           input.Title,
-		Description:     input.Description,
-		FileURL:         input.FileURL,
+		Title:       input.Title,
+		Description: input.Description,
+		//FileURL:         input.FileURL,
 		DoctorID:        input.DoctorID,
 		PatientID:       input.PatientID,
 		MedicalRecordID: &input.MedicalRecordID,
@@ -157,7 +157,7 @@ func UpdateReportByID(c *gin.Context, reportsCache *cache.Cache) {
 	}
 	report.Title = input.Title
 	report.Description = input.Description
-	report.FileURL = input.FileURL
+	// report.FileURL = input.FileURL
 	report.PatientID = input.PatientID
 	report.MedicalRecordID = &input.MedicalRecordID
 	if err := metrics.DbMetrics(config.DB, "update_reports_by_id", func(db *gorm.DB) error {
