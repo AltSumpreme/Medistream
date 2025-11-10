@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 )
 
@@ -14,9 +12,6 @@ type Report struct {
 	DoctorID        uuid.UUID  `gorm:"type:uuid;not null" json:"doctor_id"`
 	PatientID       uuid.UUID  `gorm:"type:uuid;not null" json:"patient_id"`
 	MedicalRecordID *uuid.UUID `gorm:"type:uuid;" json:"medical_record_id"`
-	DeletedAt       time.Time  `json:"deleted_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt       time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
 
 	MedicalRecord MedicalRecord `gorm:"foreignKey:MedicalRecordID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
 	Patient       Patient       `gorm:"foreignKey:PatientID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
