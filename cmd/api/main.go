@@ -38,6 +38,9 @@ func main() {
 	// Initialize Redis
 	config.InitRedis()
 
+	// Initialize AWS S3
+	config.InitS3()
+
 	//Initialize Job Queue
 	config.InitAsynqQueue()
 	jobQueue := queue.Init()
