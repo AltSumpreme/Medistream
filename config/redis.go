@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"os"
 
@@ -15,6 +16,10 @@ func InitRedis() {
 	opt, err := redis.ParseURL(os.Getenv("REDIS_URL"))
 	if err != nil {
 		log.Fatalf("failed to parse redis url:%v", err)
+	}
+	opt.TLSConfig = &tls.Config{
+		MinVersion:         tls.VersionTLS12, // enforce secure TLS versions
+		InsecureSkipVerify: false,            // ensure proper cert validation
 	}
 	Rdb = redis.NewClient(opt)
 
