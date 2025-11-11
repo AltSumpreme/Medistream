@@ -12,11 +12,11 @@ services:
       - .env
     volumes:
       - ./migrations:/app/migrations
-    depends_on:
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
+  #  depends_on:
+  #    redis:
+   #     condition: service_healthy
+    #  db:
+    #    condition: service_healthy
       
   worker:
     image: medistream-backend:v4
