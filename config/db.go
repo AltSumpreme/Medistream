@@ -36,7 +36,7 @@ func ConnectDB() {
 			log.Println("Database is ready (attempt", i, ")")
 			break
 		}
-		log.Printf("⏳ Database not ready (attempt %d/10), retrying in 5s...\n", i)
+		log.Printf("Database not ready (attempt %d/10), retrying in 5s...\n", i)
 		time.Sleep(5 * time.Second)
 	}
 	if err != nil {
