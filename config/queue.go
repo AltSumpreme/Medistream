@@ -16,15 +16,15 @@ func InitAsynqQueue() {
 	if redisURL == "" {
 		redisURL = "redis://redis:6379/0" // default
 	}
-	opt.TLSConfig = &tls.Config{
-		MinVersion:         tls.VersionTLS12, // enforce secure TLS versions
-		InsecureSkipVerify: false,            // ensure proper cert validation
-	}
+
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		log.Fatalf("Invalid REDIS_URL: %v", err)
 	}
-
+	opt.TLSConfig = &tls.Config{
+		MinVersion:         tls.VersionTLS12, // enforce secure TLS versions
+		InsecureSkipVerify: false,            // ensure proper cert validation
+	}
 	QueueRedisOpt = asynq.RedisClientOpt{
 		Addr:     opt.Addr,
 		DB:       opt.DB,
