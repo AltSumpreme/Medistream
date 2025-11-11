@@ -25,7 +25,7 @@ func main() {
 	srv := asynq.NewServer(
 		config.QueueRedisOpt,
 		asynq.Config{
-			Concurrency: 10,
+			Concurrency: 5,
 
 			Queues: map[string]int{
 				"appointments": 5,

@@ -12,6 +12,8 @@ services:
       - .env
     volumes:
       - ./migrations:/app/migrations
+    depends_on:
+      - redis
 
   worker:
     build: .
@@ -22,6 +24,16 @@ services:
     networks:
       - medistream-network
     restart: on-failure
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7
+    container_name: medistream-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - medistream-network
 
   prometheus:
     image: prom/prometheus:latest
