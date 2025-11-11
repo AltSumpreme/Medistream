@@ -3,14 +3,17 @@ package main
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/metrics"
+	"github.com/AltSumpreme/Medistream.git/queue"
 	"github.com/AltSumpreme/Medistream.git/routes"
 	"github.com/AltSumpreme/Medistream.git/services/cache"
+	"github.com/AltSumpreme/Medistream.git/services/mail"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -34,6 +37,27 @@ func main() {
 
 	// Initialize Redis
 	config.InitRedis()
+
+	// Initialize AWS S3
+	config.InitS3()
+
+	//Initialize Job Queue
+	config.InitAsynqQueue()
+	jobQueue := queue.Init()
+	defer queue.Close()
+
+	// Initialize SMTP Mailer
+	port, err := strconv.Atoi(os.Getenv("SMTP_PORT"))
+	if err != nil {
+		log.Fatalf("Invalid SMTP_PORT: %v", err)
+	}
+	mail.InitMailer(mail.MailerConfig{
+		Host:     os.Getenv("SMTP_HOST"),
+		Port:     port,
+		Username: os.Getenv("SMTP_USERNAME"),
+		Password: os.Getenv("SMTP_PASSWORD"),
+		From:     os.Getenv("SMTP_FROM"),
+	})
 
 	// Set Gin to release mode in production
 	if gin.Mode() != gin.DebugMode {
@@ -62,7 +86,7 @@ func main() {
 	reportsCache := cache.NewCache(config.Rdb, config.Ctx)
 	vitalsCache := cache.NewCache(config.Rdb, config.Ctx)
 
-	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache, vitalsCache)
+	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache, vitalsCache, jobQueue)
 
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	log.Println("Starting server on :8080")

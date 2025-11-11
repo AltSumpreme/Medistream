@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/AltSumpreme/Medistream.git/config"
+	"github.com/AltSumpreme/Medistream.git/handlers"
 	"github.com/AltSumpreme/Medistream.git/metrics"
 	"github.com/AltSumpreme/Medistream.git/models"
 	"github.com/AltSumpreme/Medistream.git/services/cache"
@@ -18,15 +19,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type AppointmentInput struct {
-	AppointmentDate time.Time `json:"appointmentDate" binding:"required"`
-	AppointmentType string    `json:"appointmentType" binding:"required,oneof=CONSULTATION FOLLOWUP CHECKUP EMERGENCY"`
-	StartTime       string    `json:"startTime" binding:"required"`
-	EndTime         string    `json:"endTime" binding:"required"`
-	Mode            string    `json:"mode" binding:"required,oneof=Online In-Person"`
-	Notes           string    `json:"notes"`
-	DoctorID        uuid.UUID `json:"doctorId" binding:"required"`
-}
 type AppointmentStatusInput struct {
 	Status string `json:"status" binding:"required,oneof=SCHEDULED CONFIRMED CANCELLED COMPLETED"`
 }
@@ -38,31 +30,18 @@ type AppointmentUpdateInput struct {
 	Notes     string `json:"notes" binding:"omitempty"`
 }
 
-func CreateAppointment(c *gin.Context) {
-	user, err := utils.GetCurrentUser(c)
-	if err != nil {
-		utils.Log.Warnf("CreateAppointment: Failed to get current user - %v", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	var input AppointmentInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.Log.Warnf("CreateAppointment: Invalid input - %v", err)
-		c.JSON(400, gin.H{"error": "Invalid input"})
-		return
-	}
+func CreateAppointment(data any) {
+	var input handlers.AppointmentInput
 
 	var patient models.Patient
-	err = metrics.DbMetrics(config.DB, "select_patient", func(db *gorm.DB) error {
-		return db.WithContext(c.Request.Context()).
+	err := metrics.DbMetrics(config.DB, "select_patient", func(db *gorm.DB) error {
+		return db.
 			Select("id").
-			Where("user_id = ?", user.UserID).
+			Where("user_id = ?", input.UserID).
 			First(&patient).Error
 	})
 	if err != nil {
 		utils.Log.Warnf("CreateAppointment: Failed to get patient ID - %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get patient ID"})
 		return
 	}
 	patientID := patient.ID
@@ -82,18 +61,15 @@ func CreateAppointment(c *gin.Context) {
 
 	if scheduleErr != nil {
 		utils.Log.Warnf("CreateAppointment: Scheduling error - %v", scheduleErr)
-		c.JSON(400, gin.H{"error": scheduleErr.Error()})
 		return
 	}
 
 	err = metrics.DbMetrics(config.DB, "insert_appointment", func(db *gorm.DB) error { return db.Create(&appointment).Error })
 	if err != nil {
 		utils.Log.Errorf("CreateAppointment: Database error - %v", err)
-		c.JSON(500, gin.H{"error": "Failed to create appointment - " + err.Error()})
 		return
 	}
 	utils.Log.Infof("CreateAppointment: Appointment created successfully with ID %s", appointment.ID)
-	c.JSON(http.StatusCreated, gin.H{"message": "Appointment created successfully"})
 
 }
 

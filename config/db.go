@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose"
@@ -17,38 +18,30 @@ var DB *gorm.DB
 
 func ConnectDB() {
 	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=%s&channel_binding=%s",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"),
-		os.Getenv("DB_SSLMODE"),
-		os.Getenv("DB_CHANNEL_BINDING"),
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		os.Getenv("POSTGRES_USER"),
+		os.Getenv("POSTGRES_PASSWORD"),
+		os.Getenv("POSTGRES_HOST"),
+		os.Getenv("POSTGRES_PORT"),
+		os.Getenv("POSTGRES_DB"),
+		os.Getenv("POSTGRES_SSLMODE"),
 	)
-	if dsn == "" {
-		log.Fatal("DATABASE_URL is not set")
-	}
 
-	// Open sql.DB for Goose
-	sqlDB, err := sql.Open("postgres", dsn)
-	if err != nil {
-		log.Fatalf("failed to open sql.DB: %v", err)
-	}
-	if err := sqlDB.Ping(); err != nil {
-		log.Fatalf("failed to ping database: %v", err)
-	}
-	log.Println("Database connection established (sql.DB)")
+	var sqlDB *sql.DB
+	var err error
 
-	// Open sql.DB for Goose
-	sqlDB, err = sql.Open("postgres", dsn)
+	for i := 1; i <= 10; i++ {
+		sqlDB, err = sql.Open("postgres", dsn)
+		if err == nil && sqlDB.Ping() == nil {
+			log.Println("Database is ready (attempt", i, ")")
+			break
+		}
+		log.Printf("⏳ Database not ready (attempt %d/10), retrying in 5s...\n", i)
+		time.Sleep(5 * time.Second)
+	}
 	if err != nil {
-		log.Fatalf("failed to open sql.DB: %v", err)
+		log.Fatalf("failed to connect to database after retries: %v", err)
 	}
-	if err := sqlDB.Ping(); err != nil {
-		log.Fatalf("failed to ping database: %v", err)
-	}
-	log.Println("Database connection established (sql.DB)")
 
 	// Run Goose migrations
 	migrationsDir := os.Getenv("MIGRATIONS_DIR")
@@ -58,21 +51,21 @@ func ConnectDB() {
 	log.Println("Database migrations completed successfully")
 
 	// Initialize GORM
-	gormLogger := logger.Default.LogMode(logger.Silent)
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{
 		Conn: sqlDB,
 	}), &gorm.Config{
-		Logger: gormLogger,
+		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		log.Fatalf("failed to initialize GORM: %v", err)
 	}
-	sqlDB.SetMaxOpenConns(10)
-	sqlDB.SetMaxIdleConns(2)
+
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetMaxIdleConns(50)
+	sqlDB.SetConnMaxLifetime(time.Hour)
 	DB = gormDB
 	log.Println("DB initialized successfully")
 }
-
 func CloseDB() {
 	sqlDB, err := DB.DB()
 	if err != nil {

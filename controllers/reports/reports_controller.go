@@ -21,23 +21,65 @@ import (
 type ReportInput struct {
 	Title           string    `json:"title" binding:"required"`
 	Description     string    `json:"description" binding:"required"`
-	FileURL         string    `json:"file_url" binding:"required"`
 	PatientID       uuid.UUID `json:"patient_id" binding:"required"`
 	DoctorID        uuid.UUID `json:"doctor_id" binding:"required"`
 	MedicalRecordID uuid.UUID `json:"medical_record_id" binding:"required"`
 }
 
+// ------------------------------
+// Create Report with File Upload
+// ------------------------------
 func CreateReport(c *gin.Context) {
-	var input ReportInput
+	title := c.PostForm("title")
+	description := c.PostForm("description")
+	patientIDStr := c.PostForm("patient_id")
+	doctorIDStr := c.PostForm("doctor_id")
+	medicalRecordIDStr := c.PostForm("medical_record_id")
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.Log.Warnf("Failed to bind JSON: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+	if title == "" || description == "" || patientIDStr == "" || doctorIDStr == "" || medicalRecordIDStr == "" {
+		utils.Log.Warnf("Missing required fields")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required fields"})
 		return
 	}
+
+	patientID, err := uuid.Parse(patientIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid patient_id"})
+		return
+	}
+
+	doctorID, err := uuid.Parse(doctorIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid doctor_id"})
+		return
+	}
+
+	medicalRecordID, err := uuid.Parse(medicalRecordIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid medical_record_id"})
+		return
+	}
+
+	// Handle file upload
+	file, fileHeader, err := c.Request.FormFile("file")
+	if err != nil {
+		utils.Log.Warnf("File upload error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+
+	// Upload file to S3 (private)
+	fileKey, err := utils.UploadFileToS3(file, fileHeader, config.S3BucketName)
+	if err != nil {
+		utils.Log.Errorf("Failed to upload to S3: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file"})
+		return
+	}
+
+	// Verify medical record access
 	var record models.MedicalRecord
 	if err := metrics.DbMetrics(config.DB, "get_medical_record_by_id_vitals", func(db *gorm.DB) error {
-		return db.Where("id = ? AND doctor_id = ?", input.MedicalRecordID).First(&record).Error
+		return db.Where("id = ? AND doctor_id = ?", medicalRecordID, doctorID).First(&record).Error
 	}); err != nil {
 		utils.Log.Warnf("Medical record not found or unauthorized access: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "You are not authorized to create a report for this medical record"})
@@ -45,13 +87,14 @@ func CreateReport(c *gin.Context) {
 	}
 
 	report := models.Report{
-		Title:           input.Title,
-		Description:     input.Description,
-		FileURL:         input.FileURL,
-		DoctorID:        input.DoctorID,
-		PatientID:       input.PatientID,
-		MedicalRecordID: &input.MedicalRecordID,
+		Title:           title,
+		Description:     description,
+		FileURL:         fileKey, // S3 key
+		DoctorID:        doctorID,
+		PatientID:       patientID,
+		MedicalRecordID: &medicalRecordID,
 	}
+
 	if err := metrics.DbMetrics(config.DB, "create_report", func(db *gorm.DB) error {
 		return db.Create(&report).Error
 	}); err != nil {
@@ -60,9 +103,12 @@ func CreateReport(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Report created successfully"})
-
+	c.JSON(http.StatusCreated, gin.H{"message": "Report created successfully", "file_key": fileKey})
 }
+
+// ------------------------------
+// Get Reports by Patient ID
+// ------------------------------
 func GetReportByPatientID(c *gin.Context) {
 	var reports []models.Report
 	patientID := c.Param("patient_id")
@@ -118,6 +164,9 @@ func GetReportByPatientID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"reports": reports})
 }
 
+// ------------------------------
+// Get Report by ID
+// ------------------------------
 func GetReportByID(c *gin.Context) {
 	reportID := c.Param("id")
 	if reportID == "" {
@@ -136,6 +185,9 @@ func GetReportByID(c *gin.Context) {
 	c.JSON(http.StatusOK, report)
 }
 
+// ------------------------------
+// Update Report by ID
+// ------------------------------
 func UpdateReportByID(c *gin.Context, reportsCache *cache.Cache) {
 	reportID := c.Param("id")
 	if reportID == "" {
@@ -157,7 +209,6 @@ func UpdateReportByID(c *gin.Context, reportsCache *cache.Cache) {
 	}
 	report.Title = input.Title
 	report.Description = input.Description
-	report.FileURL = input.FileURL
 	report.PatientID = input.PatientID
 	report.MedicalRecordID = &input.MedicalRecordID
 	if err := metrics.DbMetrics(config.DB, "update_reports_by_id", func(db *gorm.DB) error {
@@ -178,6 +229,9 @@ func UpdateReportByID(c *gin.Context, reportsCache *cache.Cache) {
 	c.JSON(http.StatusOK, gin.H{"message": "Report updated successfully"})
 }
 
+// ------------------------------
+// Delete Report by ID
+// ------------------------------
 func DeleteReportByID(c *gin.Context, reportsCache *cache.Cache) {
 	reportID := c.Param("id")
 	if reportID == "" {

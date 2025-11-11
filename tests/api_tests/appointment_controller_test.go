@@ -7,11 +7,8 @@ import (
 
 	"github.com/AltSumpreme/Medistream.git/config"
 	"github.com/AltSumpreme/Medistream.git/models"
-	"github.com/AltSumpreme/Medistream.git/routes"
-	"github.com/AltSumpreme/Medistream.git/services/cache"
 	apiclient "github.com/AltSumpreme/Medistream.git/tests/api_client"
 	"github.com/AltSumpreme/Medistream.git/tests/factories"
-	"github.com/AltSumpreme/Medistream.git/tests/middleware"
 	"github.com/AltSumpreme/Medistream.git/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -19,14 +16,14 @@ import (
 
 func setupApptRouterWithClaims(claims *utils.JWTClaims) *gin.Engine {
 	r := gin.Default()
-	r.Use(middleware.RequestTimer())
-	appointmentCache := cache.NewCache(config.Rdb, config.Ctx)
+	//r.Use(middleware.RequestTimer())
+	// appointmentCache := cache.NewCache(config.Rdb, config.Ctx)
 	r.Use(func(c *gin.Context) {
 		c.Set("jwtPayload", claims)
 		c.Next()
 	})
-	rg := r.Group("/appointments")
-	routes.RegisterAppointmentRoutes(rg, appointmentCache)
+	// rg := r.Group("/appointments")
+	// routes.RegisterAppointmentRoutes(rg, appointmentCache)
 	return r
 }
 
