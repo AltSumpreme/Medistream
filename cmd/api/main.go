@@ -64,6 +64,11 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	err = utils.CreateAdminUserIfNotExists()
+	if err != nil {
+		utils.Log.Warnf("Failed to create admin user: %v", err)
+	}
+
 	router := gin.Default()
 
 	origins := os.Getenv("CORS_ALLOW_ORIGINS")
