@@ -3,7 +3,7 @@
 This document summarizes the performance characteristics, capacity limits,
 and overload behavior of the Medistream backend.
 
----
+
 
 ## Workload Model
 
@@ -20,7 +20,7 @@ I benchmarked realistic user workflows using **k6** as well as **wrk**, focusing
    - Pre-authenticated requests
    - Isolates business logic from auth overhead
 
----
+
 
 ## Test Environment
 
@@ -31,7 +31,7 @@ I benchmarked realistic user workflows using **k6** as well as **wrk**, focusing
 - Execution: Local Docker Compose
 - Load Tool: k6
 
----
+
 
 ## Results Summary
 
@@ -52,7 +52,6 @@ I benchmarked realistic user workflows using **k6** as well as **wrk**, focusing
 **Root Cause**
 - CPU-bound password hashing during signup
 
----
 
 ### Appointments-Only (Steady State)
 
@@ -60,7 +59,7 @@ I benchmarked realistic user workflows using **k6** as well as **wrk**, focusing
 - Lower p95 latency
 - Bottleneck shifts from CPU-bound auth to DB writes and indexes
 
----
+
 
 ## Key Takeaways
 
