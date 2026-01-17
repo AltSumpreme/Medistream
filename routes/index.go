@@ -10,11 +10,11 @@ import (
 func RegisterRoutes(r *gin.Engine, appointmentCache *cache.Cache, medicalrecordsCache *cache.Cache, prescriptionsCache *cache.Cache, reportsCache *cache.Cache, vitalsCache *cache.Cache, jobQueue *asynq.Client) {
 
 	auth := r.Group("/auth")
-	// auth.Use(middleware.StrictRateLimiterMiddleware())
+	auth.Use(middleware.StrictRateLimiterMiddleware())
 	RegisterAuthRoutes(auth)
 
 	protected := r.Group("/")
-	// protected.Use(middleware.RateLimiterMiddleware())
+	protected.Use(middleware.RateLimiterMiddleware())
 	protected.Use(middleware.AuthMiddleware())
 
 	RegisterUserRoutes(protected.Group("/user"))
