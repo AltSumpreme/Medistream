@@ -5,7 +5,6 @@ to evaluate Medistream’s resilience, degradation behavior, and fault isolation
 
 The goal is not zero failure, but controlled, predictable failure.
 
----
 
 ## Failure Philosophy
 
@@ -15,7 +14,7 @@ Medistream is designed to:
 - Isolate failures across subsystems
 - Preserve core functionality under partial outages
 
----
+
 
 ## 1. CPU Saturation (Signup Overload)
 
@@ -75,7 +74,7 @@ CPU-bound workloads degrade gracefully without destabilizing the system.
 ### Conclusion
 Async job failures are isolated from request path.
 
----
+
 
 ## 4. Invalid Authentication & Malformed Tokens
 
@@ -119,7 +118,7 @@ Async job failures are isolated from request path.
 ### Status
 - Failure scenarios designed but not yet executed
 
----
+
 
 ## Key Takeaways
 
@@ -128,7 +127,7 @@ Async job failures are isolated from request path.
 - Overload scenarios degrade latency before correctness
 - Failure modes are observable and predictable
 
----
+
 
 ## Future Chaos Experiments
 
