@@ -17,7 +17,7 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
-      
+
   worker:
     image: medistream-backend:v4
     container_name: medistream-worker
@@ -32,7 +32,7 @@ services:
       db:
         condition: service_healthy
     restart: on-failure
-    
+
   db:
     image: postgres:15
     container_name: medistream-db
@@ -49,7 +49,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-      
+
   redis:
     image: redis:7-alpine
     container_name: medistream-redis
@@ -76,7 +76,7 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - medistream-network
-      
+
   grafana:
     image: grafana/grafana:10.1.1
     container_name: medistream-grafana

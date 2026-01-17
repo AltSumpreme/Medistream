@@ -93,6 +93,14 @@ func main() {
 
 	routes.RegisterRoutes(router, appointmentCache, medicalrecordsCache, prescriptionsCache, reportsCache, vitalsCache, jobQueue)
 
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "ok",
+			"time":   time.Now().Format(time.RFC3339),
+		})
+	})
+
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	log.Println("Starting server on :8080")
 	if err := router.Run(":8080"); err != nil {

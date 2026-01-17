@@ -4,7 +4,8 @@ set -a
 source .env
 set +a
 
-export GOOSE_DBSTRING=$DATABASE_URL
+GOOSE_DBSTRING="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=${POSTGRES_SSLMODE}"
+export GOOSE_DBSTRING
 export GOOSE_DRIVER=postgres
 export GOOSE_DIR=./migrations
 
